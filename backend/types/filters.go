@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 
 	"github.com/disintegration/gift"
 )
@@ -33,8 +34,8 @@ func CreateFilter(fr FilterRequest) (Filter, error) {
 		var v Resize
 		err = json.Unmarshal(fr.Params, &v)
 		f = v
-	case "croptosize":
-		var v CropToSize
+	case "crop":
+		var v Crop
 		err = json.Unmarshal(fr.Params, &v)
 		f = v
 	case "rotate":
@@ -45,13 +46,74 @@ func CreateFilter(fr FilterRequest) (Filter, error) {
 		var v Brightness
 		err = json.Unmarshal(fr.Params, &v)
 		f = v
-	// ... el resto igual
+	case "contrast":
+		var v Contrast
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "saturation":
+		var v Saturation
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "gamma":
+		var v Gamma
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "gaussianblur":
+		var v GaussianBlur
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "unsharpmask":
+		var v UnsharpMask
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "sigmoid":
+		var v Sigmoid
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "pixelate":
+		var v Pixelate
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "colorize":
+		var v Colorize
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "sepia":
+		var v Sepia
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "mean":
+		var v Mean
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "median":
+		var v Median
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "minimum":
+		var v Minimum
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "maximum":
+		var v Maximum
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "hue":
+		var v Hue
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
+	case "colorbalance":
+		var v ColorBalance
+		err = json.Unmarshal(fr.Params, &v)
+		f = v
 	case "grayscale":
 		f = Grayscale{}
 	case "invert":
 		f = Invert{}
 	case "rotate180":
 		f = Rotate180{}
+	case "scanify":
+		f = NewScanifyFilter()
 	default:
 		return nil, fmt.Errorf("unknown filter: %s", fr.Filter)
 	}
@@ -69,41 +131,50 @@ func CreateFilter(fr FilterRequest) (Filter, error) {
 	return f, nil
 }
 
+func (f *ScanifyFilter) Draw(dst draw.Image, src image.Image, options *gift.Options) {
+	bounds := src.Bounds()
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			gray := color.GrayModel.Convert(src.At(x, y)).(color.Gray)
+			var out color.Gray
+
+			if gray.Y > 200 {
+				out = color.Gray{255}
+			} else if gray.Y < 80 {
+				out = color.Gray{0}
+			} else {
+				out = gray
+			}
+
+			dst.Set(x, y, out)
+		}
+	}
+}
+
+func (f *ScanifyFilter) Bounds(srcBounds image.Rectangle) image.Rectangle {
+	return srcBounds
+}
+
+func NewScanifyFilter() *ScanifyFilter {
+	return &ScanifyFilter{}
+}
+
 type FilterRequest struct {
 	Filter string          `json:"filter"`
 	Params json.RawMessage `json:"params"`
+}
+
+func (f *ScanifyFilter) ToGift() gift.Filter {
+	return f
 }
 
 func (f Resize) ToGift() gift.Filter {
 	return gift.Resize(f.Width, f.Height, gift.LanczosResampling)
 }
 
-// CropToSize filter
-func (f CropToSize) ToGift() gift.Filter {
-	var anchor gift.Anchor
-	switch f.Anchor {
-	case "center":
-		anchor = gift.CenterAnchor
-	case "top":
-		anchor = gift.TopAnchor
-	case "topright":
-		anchor = gift.TopRightAnchor
-	case "right":
-		anchor = gift.RightAnchor
-	case "bottomright":
-		anchor = gift.BottomRightAnchor
-	case "bottom":
-		anchor = gift.BottomAnchor
-	case "bottomleft":
-		anchor = gift.BottomLeftAnchor
-	case "left":
-		anchor = gift.LeftAnchor
-	case "topleft":
-		anchor = gift.TopLeftAnchor
-	default:
-		anchor = gift.CenterAnchor
-	}
-	return gift.CropToSize(f.Width, f.Height, anchor)
+// Crop filter
+func (f Crop) ToGift() gift.Filter {
+	return gift.Crop(image.Rect(f.X, f.Y, f.Width+f.X, f.Height+f.Y))
 }
 
 // Rotate filter
@@ -223,10 +294,11 @@ type Resize struct {
 	Height int `json:"height"`
 }
 
-type CropToSize struct {
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
-	Anchor string `json:"anchor"` // e.g. "center", "left", "right", etc.
+type Crop struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+	X      int `json:"x"`
+	Y      int `json:"y"`
 }
 
 type Rotate struct {
@@ -311,9 +383,10 @@ type ColorBalance struct {
 
 // Filters without parameters
 type (
-	Grayscale struct{}
-	Invert    struct{}
-	Rotate180 struct{}
+	Grayscale     struct{}
+	Invert        struct{}
+	Rotate180     struct{}
+	ScanifyFilter struct{}
 )
 
 // Validate method
@@ -324,12 +397,9 @@ func (f Resize) Validate() error {
 	return nil
 }
 
-func (f CropToSize) Validate() error {
-	if f.Width <= 0 || f.Height <= 0 {
-		return fmt.Errorf("croptosize: width and height must be greater than zero")
-	}
-	if f.Anchor == "" {
-		return fmt.Errorf("croptosize: anchor must be specified")
+func (f Crop) Validate() error {
+	if f.Width < 0 || f.Height < 0 || f.X < 0 || f.Y < 0 {
+		return fmt.Errorf("crop: values must be greater than zero")
 	}
 	return nil
 }
@@ -461,6 +531,7 @@ func (f ColorBalance) Validate() error {
 }
 
 // Filters sin parámetros
-func (f Grayscale) Validate() error { return nil }
-func (f Invert) Validate() error    { return nil }
-func (f Rotate180) Validate() error { return nil }
+func (f Grayscale) Validate() error     { return nil }
+func (f Invert) Validate() error        { return nil }
+func (f Rotate180) Validate() error     { return nil }
+func (f ScanifyFilter) Validate() error { return nil }

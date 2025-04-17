@@ -36,5 +36,9 @@
 		"tailwindcss": "^4.0.0",
 		"vite": "^6.2.5",
 		"vitest": "^3.0.0"
+	},
+	"dependencies": {
+		"cropperjs": "^2.0.0",
+		"svelte-easy-crop": "^4.0.1"
 	}
 }

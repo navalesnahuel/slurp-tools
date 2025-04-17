@@ -1,3 +1,91 @@
+@import url("./assets/theme.css");
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    background-color: var(--base);
+    color: var(--text);
+    font-family: var(--font-body);
+    margin: 0;
+    padding: 0;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+
+main {
+    flex-grow: 1;
+    padding: 2rem;
+}
+
+
+span {
+    font-family: inherit;
+    font-weight: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: var(--font-header);
+    color: var(--text);
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+}
+
+
+h1 {
+    color: var(--text);
+    font-size: 2.5rem;
+}
+
+p {
+    margin-bottom: 1em;
+}
+
+a {
+    color: var(--blue);
+    text-decoration: none;
+    transition: color var(--transition-speed) ease;
+}
+
+a:hover {
+    color: var(--sapphire);
+    text-decoration: underline;
+}
+
+
+.base {
+    background-color: var(--base);
+    color: var(--text)
+}
+
+.mantle {
+    background-color: var(--mantle);
+    color: var(--base);
+}
+
+.crust {
+    background-color: var(--crust);
+    color: var(--base);
+}
+
+.text {
+    background-color: var(--text);
+    color: var(--base);
+}
+
+
+* {
+    box-sizing: border-box;
+}

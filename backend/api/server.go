@@ -28,9 +28,11 @@ func (s *APIServer) RunServer() {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/image/upload", MakeHTTPHandler(s.handleUploadImage))
+	router.HandleFunc("/image/scan", MakeHTTPHandler(s.handleScanner))
 	router.HandleFunc("/image/filter/{image_id}", MakeHTTPHandler(s.handleApplyFilterToImage))
 	router.HandleFunc("/image/{image_id}/undo", MakeHTTPHandler(s.handleUndo))
 	router.HandleFunc("/image/{image_id}/redo", MakeHTTPHandler(s.handleRedo))
+	router.HandleFunc("/image/{image_id}/download", MakeHTTPHandler(s.handleServeFile))
 
 	http.ListenAndServe(s.listenAddr, router)
 }

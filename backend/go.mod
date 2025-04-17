@@ -8,3 +8,5 @@ require (
 )
 
 require github.com/gorilla/mux v1.8.1
+
+require gocv.io/x/gocv v0.41.0 // indirect

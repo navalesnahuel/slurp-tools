@@ -1,0 +1,49 @@
+@import url('../../static/fonts/fonts.css');
+
+
+:root {
+    /* Primary Colors */
+    --rosewater: #f5e0dc;
+    /* Rosewater */
+    --flamingo: #f2cdcd;
+    /* Flamingo */
+    --pink: #f5c2e7;
+    /* Pink */
+    --mauve: #cba6f7;
+    /* Mauve */
+    --red: #f38ba8;
+    /* Red */
+    --maroon: #eba0ac;
+    /* Maroon */
+    --peach: #fab387;
+    /* Peach */
+    --yellow: #f9e2af;
+    /* Yellow */
+    --green: #a6e3a1;
+    /* Green */
+    --teal: #94e2d5;
+    /* Teal */
+    --sky: #89dceb;
+    /* Sky */
+    --sapphire: #74c7ec;
+    /* Sapphire */
+    --blue: #89b4fa;
+    /* Blue */
+    --lavender: #b4befe;
+    /* Lavender */
+    --mantle: #181825;
+    /* Mantle */
+    --crust: #11111b;
+    /* Crust */
+
+    --base: #cdd6f4;
+    --overlay: #bac2de;
+    --text: #1e1e2e;
+    --transition-speed: 0.2s;
+
+    /* Header and Body Fonts */
+    --font-header: 'Raleway', sans-serif;
+    /* For headers */
+    --font-body: 'Geist', sans-serif;
+    /* For body text */
+}
