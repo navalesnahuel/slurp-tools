@@ -421,23 +421,23 @@
 	}
 
 	.section-resize {
-		background-color: var(--pink); /* Fondo Rosa */
-		color: var(--base); /* Texto oscuro */
+		background-color: var(--maroon); /* Fondo Rosa */
+		color: var(--text); /* Texto oscuro */
 	}
 	.section-resize h4 {
-		color: var(--base); /* Texto oscuro para el título */
+		color: var(--text); /* Texto oscuro para el título */
 		border-bottom-color: color-mix(in srgb, var(--base) 30%, transparent);
 	}
 	.original-dims-info {
 		font-size: 0.8rem;
 		color: color-mix(
 			in srgb,
-			var(--base) 80%,
+			var(--text) 80%,
 			transparent
 		); /* Texto oscuro pero menos énfasis */
 		margin-bottom: 1rem;
 		text-align: center;
-		background: color-mix(in srgb, var(--base) 10%, transparent); /* Fondo muy sutil oscuro */
+		background: color-mix(in srgb, var(--text) 10%, transparent); /* Fondo muy sutil oscuro */
 		padding: 0.3rem 0.6rem;
 		border-radius: 3px;
 	}
@@ -493,7 +493,7 @@
 		gap: 0.5rem;
 		font-size: 0.85rem;
 		cursor: pointer;
-		color: var(--base);
+		color: var(--text);
 	}
 	.aspect-toggle input[type='checkbox'] {
 		accent-color: var(--mauve);

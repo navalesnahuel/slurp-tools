@@ -42,7 +42,7 @@
 			title: 'Scan to PDF',
 			description:
 				'Enhance scanned documents by cleaning them up and exporting to high-quality PDFs.',
-			link: '/scan-to-pdf',
+			link: '/image-scan',
 			icon: '📷',
 			accentColor: 'peach',
 			comingSoon: false
