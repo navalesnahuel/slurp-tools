@@ -349,3 +349,33 @@ export async function scanAndUpload(file, points) {
 		throw new Error(`/image/scan Network/Processing Error: ${err.message}`);
 	}
 }
+
+export async function imagesToPDF(files) {
+	try {
+		const formData = new FormData();
+		files.forEach((file) => formData.append('image', file)); // clave "images" como en el backend
+
+		const response = await fetch('http://localhost:3000/image/pdf', {
+			method: 'POST',
+			body: formData
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			throw new Error(`Server error: ${errorText}`);
+		}
+
+		const blob = await response.blob();
+		const url = URL.createObjectURL(blob);
+
+		// Descargar el archivo
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = 'image.pdf';
+		a.click();
+		URL.revokeObjectURL(url);
+	} catch (err) {
+		console.error('❌ Error generando PDF:', err);
+		alert('Hubo un error al generar el PDF.');
+	}
+}

@@ -29,6 +29,7 @@ func (s *APIServer) RunServer() {
 
 	router.HandleFunc("/image/upload", MakeHTTPHandler(s.handleUploadImage))
 	router.HandleFunc("/image/scan", MakeHTTPHandler(s.handleScanner))
+	router.HandleFunc("/image/pdf", MakeHTTPHandler(s.handlerImageToPDF))
 	router.HandleFunc("/image/filter/{image_id}", MakeHTTPHandler(s.handleApplyFilterToImage))
 	router.HandleFunc("/image/{image_id}/undo", MakeHTTPHandler(s.handleUndo))
 	router.HandleFunc("/image/{image_id}/redo", MakeHTTPHandler(s.handleRedo))

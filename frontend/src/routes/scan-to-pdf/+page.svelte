@@ -13,7 +13,8 @@
 	let imageInfo = null; // { UUID, Version } from the server
 	let imageUrl = ''; // URL to display (blob URL for local, server URL for processed)
 	let currentBlobUrl = null; // Specifically tracks the active blob URL for revocation
-	let isLoading = false;
+	let isLoading = false; // General loading (scan, filters)
+	let isGeneratingPdf = false; // Specific loading for PDF generation
 	let loadingStep = '';
 	let errorMessage = '';
 
@@ -135,6 +136,7 @@
 			originalFilename = file.name; // Store the new file's name
 			errorMessage = '';
 			isLoading = false; // Start fresh, not loading yet
+			isGeneratingPdf = false;
 			loadingStep = 'Loading image...'; // Indicate loading the preview
 			handles = [
 				// Reset handles to default positions
@@ -230,11 +232,14 @@
 		return { x: clientX - rect.left, y: clientY - rect.top };
 	}
 
+	// Combined busy state check
+	$: isBusy = isLoading || isGeneratingPdf;
+
 	function handleMouseDown(event) {
 		event.preventDefault();
 		if (
 			!showHandles ||
-			isLoading ||
+			isBusy ||
 			!browser ||
 			displayWidth <= 0 ||
 			displayHeight <= 0 ||
@@ -263,7 +268,7 @@
 		event.preventDefault();
 		if (
 			activeHandleIndex === -1 ||
-			isLoading ||
+			isBusy ||
 			!canvasRef ||
 			!browser ||
 			displayWidth <= 0 ||
@@ -286,19 +291,19 @@
 		event.preventDefault(); // Prevent potential lingering effects
 		if (activeHandleIndex !== -1) {
 			activeHandleIndex = -1;
-			if (canvasRef && showHandles) canvasRef.style.cursor = 'grab'; // Reset cursor if handles still visible
+			if (canvasRef && showHandles && !isBusy) canvasRef.style.cursor = 'grab'; // Reset cursor if handles still visible and not busy
 		}
 	}
 
 	function handleMouseEnterCanvas() {
-		if (showHandles && !isLoading && canvasRef && activeHandleIndex === -1) {
+		if (showHandles && !isBusy && canvasRef && activeHandleIndex === -1) {
 			canvasRef.style.cursor = 'grab';
 		}
 	}
 
 	function handleMouseLeaveCanvas() {
 		// Reset cursor if not actively dragging a handle
-		if (activeHandleIndex === -1 && !isLoading && canvasRef) {
+		if (activeHandleIndex === -1 && !isBusy && canvasRef) {
 			canvasRef.style.cursor = 'default';
 		}
 	}
@@ -319,11 +324,15 @@
 		);
 
 		// Determine if loading finished based on loadingStep
-		if (loadingStep === 'Loading image...' || loadingStep === 'Loading new version...') {
+		// Make sure not to interfere with PDF generation step
+		if (
+			!isGeneratingPdf &&
+			(loadingStep === 'Loading image...' || loadingStep === 'Loading new version...')
+		) {
 			isLoading = false;
 			loadingStep = '';
 			console.log('[DEBUG] handleImageLoad: Loading finished, isLoading set to false.');
-		} else if (isLoading) {
+		} else if (!isGeneratingPdf && isLoading) {
 			// If still marked as loading but step is unexpected, reset loading state anyway
 			console.warn(
 				'[DEBUG] handleImageLoad: Finished loading, but loadingStep was unexpected:',
@@ -356,7 +365,10 @@
 					console.log(
 						`[DEBUG] handleImageLoad: Initial canvas setup. Size: ${displayWidth.toFixed(1)}x${displayHeight.toFixed(1)}`
 					);
-					requestAnimationFrame(drawCanvas); // Draw initial state
+					// Only draw if handles are meant to be shown at this point
+					if (showHandles) {
+						requestAnimationFrame(drawCanvas); // Draw initial state
+					}
 				} else {
 					console.warn(
 						'[DEBUG] handleImageLoad: Image rect invalid after tick. Canvas not sized.'
@@ -389,7 +401,8 @@
 		}
 		console.log('[DEBUG] refreshImage: Starting refresh for UUID:', imageUUID);
 
-		isLoading = true;
+		isLoading = true; // Set main loading flag
+		isGeneratingPdf = false; // Ensure PDF flag is reset if refresh is triggered
 		loadingStep = 'Loading new version...';
 		errorMessage = '';
 		showHandles = false; // Hide handles for processed image view
@@ -421,7 +434,8 @@
 		naturalHeight = 0;
 		displayWidth = 0;
 		displayHeight = 0;
-		isLoading = false;
+		isLoading = false; // Reset loading flags
+		isGeneratingPdf = false;
 		loadingStep = '';
 		showHandles = false; // Ensure handles are hidden on reset
 		activeHandleIndex = -1; // Reset active handle
@@ -474,6 +488,7 @@
 
 		console.log('[DEBUG] handleApplyScanAndUpload: Proceeding with Scan & Upload.');
 		isLoading = true;
+		isGeneratingPdf = false; // Not generating PDF during scan
 		loadingStep = 'Scanning & Uploading...';
 		errorMessage = '';
 		showHandles = false; // Hide handles during/after processing
@@ -508,6 +523,7 @@
 			cleanupBlobUrl(); // Revoke the local blob URL, no longer needed
 
 			// Trigger refresh to load the processed image from the server
+			// isLoading state will be handled by refreshImage -> handleImageLoad
 			refreshImage();
 		} catch (err) {
 			console.error('[DEBUG] handleApplyScanAndUpload: API Failed:', err);
@@ -515,16 +531,15 @@
 			// Reset state completely on failure, keeping the error message
 			resetStateOnError(true);
 		}
-		// isLoading and loadingStep are handled by refreshImage -> handleImageLoad
 	}
 
 	// --- Helper for subsequent UUID-based filters/actions ---
 	async function applyFilterAndUpdate(filterPromise, filterName = 'filter') {
-		if (!imageInfo || !imageUUID || isLoading) {
-			// Ensure we have server info and UUID
+		// Guard against running while already loading or generating PDF
+		if (!imageInfo || !imageUUID || isBusy) {
 			errorMessage = `Cannot apply ${filterName} - no valid server image state or already processing.`;
 			console.warn(
-				`[DEBUG] applyFilterAndUpdate (${filterName}): Cannot apply - missing imageInfo/UUID or isLoading.`
+				`[DEBUG] applyFilterAndUpdate (${filterName}): Cannot apply - missing imageInfo/UUID or isBusy.`
 			);
 			return;
 		}
@@ -532,7 +547,7 @@
 			`[DEBUG] applyFilterAndUpdate (${filterName}): Starting for UUID: ${imageUUID}`
 		);
 
-		isLoading = true;
+		isLoading = true; // Main loading flag
 		loadingStep = `Applying ${filterName}...`;
 		errorMessage = '';
 		showHandles = false; // Ensure handles remain hidden
@@ -547,53 +562,103 @@
 			imageInfo = result;
 			imageUUID = result.UUID; // Should be the same, but update just in case
 
-			// No need to cleanupBlobUrl here as it should already be cleaned after initial upload
-
 			// Refresh the image view to show the result of the filter
+			// isLoading state will be handled by refreshImage -> handleImageLoad
 			refreshImage();
 		} catch (filterErr) {
 			console.error(`[DEBUG] applyFilterAndUpdate (${filterName}): API Failed:`, filterErr);
 			errorMessage = filterErr.message || `Failed to apply ${filterName}.`;
-			// Reset loading state on error, but keep the image displayed (don't call resetStateOnError unless needed)
+			// Reset loading state on error, keep the current (failed) image view
 			isLoading = false;
 			loadingStep = '';
-			// Re-enable observation if the image element is still present, as refreshImage wasn't successful
+			// Re-enable observation if the image element is still present
 			tick().then(() => {
 				if (imageRef) observeImageResize(imageRef);
 			});
 		}
-		// isLoading and loadingStep are handled by refreshImage -> handleImageLoad on success
 	}
 
 	// --- Specific Action Handlers (Using the Helper) ---
 	function handleApplyRotate(angle) {
-		if (!imageInfo || !imageUUID) return; // Guard against calling without server state
+		if (!imageInfo || !imageUUID || isBusy) return; // Guard
 		applyFilterAndUpdate(imageApi.applyRotateFilter(imageInfo.UUID, angle), `Rotate ${angle}°`);
 	}
 
 	async function handleUndo() {
-		if (!imageInfo || !imageUUID || imageInfo.Version < 1) return; // Guard: Must have server state and history
+		if (!imageInfo || !imageUUID || imageInfo.Version < 1 || isBusy) return; // Guard
 		applyFilterAndUpdate(imageApi.undoChanges(imageInfo.UUID), 'Undo');
 	}
 
 	async function handleRedo() {
-		if (!imageInfo || !imageUUID) return; // Guard against calling without server state
+		if (!imageInfo || !imageUUID || isBusy) return; // Guard
 		applyFilterAndUpdate(imageApi.redoChanges(imageInfo.UUID), 'Redo');
 	}
 
 	function handleOpenImage() {
-		if (!imageUUID || isLoading) return; // Guard: Must have processed image UUID, not loading
+		if (!imageUUID || isBusy) return; // Guard
 		const url = imageApi.getRenderImage(imageUUID);
 		const urlTs = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`; // Add timestamp to bypass cache
 		window.open(urlTs, '_blank');
 	}
 
+	// --- PDF Generation Handler ---
+	async function handleDownloadPdf() {
+		// Use the reactive state 'canDownloadPdf' for the guard
+		if (!canDownloadPdf || !browser) {
+			console.warn('[DEBUG] handleDownloadPdf: Cannot generate PDF - Conditions not met.');
+			return;
+		}
+
+		isGeneratingPdf = true;
+		loadingStep = 'Generating PDF...';
+		errorMessage = '';
+		console.log('[DEBUG] handleDownloadPdf: Starting PDF generation for UUID:', imageUUID);
+
+		try {
+			// 1. Fetch the current processed image data from the server
+			const renderUrl = imageApi.getRenderImage(imageUUID);
+			console.log(`[DEBUG] Fetching image data from: ${renderUrl}`);
+			const imageResponse = await fetch(renderUrl);
+			if (!imageResponse.ok) {
+				throw new Error(
+					`Failed to fetch processed image data: ${imageResponse.status} ${imageResponse.statusText}`
+				);
+			}
+			const imageBlob = await imageResponse.blob();
+
+			// Determine a filename (optional but good practice)
+			const fileExtension = imageBlob.type.split('/')[1] || 'png'; // Default to png if type is missing
+			const filename = `scanned_${imageUUID}_v${imageInfo?.Version || 0}.${fileExtension}`;
+
+			// 2. Convert the fetched blob into a File object to send to the API
+			const imageFileForPdf = new File([imageBlob], filename, { type: imageBlob.type });
+			console.log(
+				`[DEBUG] Created File object for PDF: ${imageFileForPdf.name}, size: ${imageFileForPdf.size}, type: ${imageFileForPdf.type}`
+			);
+
+			// 3. Call the imported imagesToPDF function from imageApi
+			// It handles the actual API call to /image/pdf and the download/opening
+			await imageApi.imagesToPDF([imageFileForPdf]); // Pass the file in an array
+
+			console.log(
+				'[DEBUG] handleDownloadPdf: PDF generation successful (API handled download/open).'
+			);
+		} catch (err) {
+			console.error('[DEBUG] handleDownloadPdf: Failed:', err);
+			// The API function might show an alert, but set error message here too
+			errorMessage = err.message || 'An unknown error occurred while generating the PDF.';
+		} finally {
+			// Reset loading state regardless of success or failure
+			isGeneratingPdf = false;
+			loadingStep = '';
+			console.log('[DEBUG] handleDownloadPdf: Finished.');
+		}
+	}
+
 	// --- Trigger File Input ---
 	function handleOpenImageClick() {
-		if (isLoading || !browser) return;
+		if (isBusy || !browser) return; // Guard
 		console.log('[DEBUG] handleOpenImageClick: Triggering file input.');
-		// Resetting state here could be disruptive if user cancels.
-		// Let handleFileSelect manage the state reset *if* a file is actually chosen.
 		document.getElementById('file-input')?.click();
 	}
 
@@ -625,13 +690,15 @@
 	$: isImageSelected = !!imageFile || !!imageUrl; // True if local file selected OR server image URL exists
 	$: isInitialLocalImageLoaded =
 		!!imageFile && !!naturalWidth && naturalHeight > 0 && showHandles; // Ready for perspective adjustment
-	$: isImageProcessed =
-		!!imageInfo && !!imageUUID && !showHandles && !isLoading && !!imageUrl && !currentBlobUrl; // Server image is loaded and displayed
-	$: canApplyScan = isInitialLocalImageLoaded && !isLoading; // Can only scan when local image loaded & handles shown
-	$: canEdit = isImageProcessed && !isLoading; // Can only edit (rotate, undo, redo) when processed image is displayed
+	$: isImageProcessed = // State where server image is loaded and displayed, and nothing is loading
+		!!imageInfo && !!imageUUID && !showHandles && !isBusy && !!imageUrl && !currentBlobUrl;
+
+	$: canApplyScan = isInitialLocalImageLoaded && !isBusy; // Can only scan when local image loaded & handles shown & not busy
+	$: canEdit = isImageProcessed && !isBusy; // Can only edit when processed image is displayed & not busy
 	$: canUndo = canEdit && imageInfo?.Version > 0;
 	$: canRedo = canEdit; // Redo capability check might need more info from API in future
-	$: canOpenImage = isImageProcessed && !isLoading; // Can open the final image
+	$: canOpenImage = isImageProcessed && !isBusy; // Can open the final image if not busy
+	$: canDownloadPdf = isImageProcessed && !isBusy; // Can download PDF if processed and not busy
 
 	// --- Reactive Updates for Canvas Visibility and Clearing ---
 	$: if (browser && canvasRef) {
@@ -642,7 +709,7 @@
 			ctx.clearRect(0, 0, canvasRef.width, canvasRef.height);
 		}
 		// Update cursor based on state
-		if (showHandles && !isLoading && activeHandleIndex === -1) {
+		if (showHandles && !isBusy && activeHandleIndex === -1) {
 			canvasRef.style.cursor = 'grab';
 		} else if (activeHandleIndex !== -1) {
 			canvasRef.style.cursor = 'grabbing';
@@ -658,12 +725,12 @@
 	}
 </script>
 
-<!-- TEMPLATE (HTML - Removed "Change Image" button) -->
+<!-- TEMPLATE -->
 <svelte:head><title>Image Scanner - Slurp Tools</title></svelte:head>
 <div class="editor-wrapper">
 	<div class="page-container">
-		{#if !isImageSelected && !isLoading}
-			<!-- Initial State: Prompt to Open Image -->
+		{#if !isImageSelected && !isBusy}
+			<!-- Initial State -->
 			<div class="initial-upload-state" transition:fade={{ duration: 200 }}>
 				<h1>Image Scanner</h1>
 				<p class="tool-description">
@@ -671,8 +738,10 @@
 					Upload".
 				</p>
 				<div class="input-area file-input-section">
-					<!-- Modified Button to Trigger File Input -->
-					<button on:click={handleOpenImageClick} class="file-label button-like"
+					<button
+						on:click={handleOpenImageClick}
+						class="file-label button-like"
+						disabled={isBusy}
 						><svg
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 24 24"
@@ -688,18 +757,18 @@
 				</div>
 				{#if errorMessage}<p class="error-message">{errorMessage}</p>{/if}
 			</div>
-		{:else if isLoading && !imageUrl}
-			<!-- Loading State (e.g., initial API call before image URL is known) -->
+		{:else if isBusy && !imageUrl}
+			<!-- Loading State (Initial) -->
 			<div class="loading-state" transition:fade={{ duration: 200 }}>
 				<div class="spinner"></div>
 				<p>{loadingStep || 'Loading...'}</p>
 				{#if errorMessage}<p class="error-message">{errorMessage}</p>{/if}
 			</div>
-		{:else if isImageSelected || isLoading}
-			<!-- Editor Interface: Shown once an image is selected or loading -->
+		{:else if isImageSelected || isBusy}
+			<!-- Editor Interface -->
 			<div
 				class="editor-interface"
-				class:loading={isLoading}
+				class:loading={isBusy}
 				transition:fade={{ duration: 300 }}
 			>
 				<div class="top-toolbar">
@@ -711,7 +780,7 @@
 							on:click={handleApplyScanAndUpload}
 							disabled={!canApplyScan}
 							title={!canApplyScan
-								? 'Select image & wait for it to load fully'
+								? 'Select image & wait for it to load fully, or process is busy'
 								: 'Apply Perspective Correction & Scan Filters'}
 							>{#if isLoading && loadingStep.startsWith('Scanning')}
 								<span class="button-spinner"></span> {loadingStep}
@@ -732,7 +801,7 @@
 								alt={originalFilename || 'Image preview'}
 								on:load={handleImageLoad}
 								on:error={handleImageElementError}
-								style:opacity={isLoading && !showHandles ? 0.6 : 1}
+								style:opacity={isBusy && !showHandles ? 0.6 : 1}
 							/>
 							<!-- Canvas Overlay for Handles -->
 							<canvas
@@ -747,13 +816,12 @@
 								on:touchend={handleMouseUp}
 								style:touch-action={'none'}
 							></canvas>
-						{:else if !isLoading}
-							<!-- Fallback if imageUrl is missing but not loading -->
+						{:else if !isBusy}
 							<p class="placeholder-text error-message">Could not load image.</p>
 						{/if}
 					</div>
-					<!-- Loading Overlay for Main Area (shown during scan/upload, not during version load) -->
-					{#if isLoading && loadingStep && !loadingStep.includes('Loading new version')}
+					<!-- Loading Overlay for Main Area -->
+					{#if isBusy && loadingStep && !loadingStep.includes('Loading new version')}
 						<div class="main-area-overlay">
 							<div class="spinner"></div>
 							<p>{loadingStep || 'Processing...'}</p>
@@ -776,24 +844,23 @@
 								Orig. Dims: {naturalWidth} x {naturalHeight} px
 							</p>
 						{/if}
-						<!-- "Change Image" Button Removed -->
 					</div>
 					<!-- Status/Instructions Section -->
 					<div class="sidebar-section details">
 						<h4 class="h4-pink">Status & Instructions</h4>
-						{#if isInitialLocalImageLoaded}
+						{#if isInitialLocalImageLoaded && !isBusy}
 							<p>
 								Drag the red corners to define the perspective, then click "Scan &
 								Upload" in the toolbar.
 							</p>
-						{:else if showHandles && !!imageFile && !(!!naturalWidth && naturalHeight > 0)}
+						{:else if showHandles && !!imageFile && !(!!naturalWidth && naturalHeight > 0) && !isBusy}
 							<p>Loading image preview, please wait...</p>
-						{:else if isImageProcessed}
+						{:else if isImageProcessed && !isBusy}
 							<p>
 								Scan complete (Version: {imageInfo?.Version ?? 'N/A'}). Use edit
-								controls below or open a new image.
+								controls below or download options.
 							</p>
-						{:else if isLoading}
+						{:else if isBusy}
 							<p>{loadingStep || 'Processing'}...</p>
 						{:else}
 							<p>Select an image using the 'Open Image' button.</p>
@@ -887,14 +954,51 @@
 							>
 						</div>
 					</div>
-					<!-- Open/Download Section -->
+					<!-- Download Section -->
 					<div class="sidebar-section download-section">
-						<button
-							on:click={handleOpenImage}
-							class="button-like save-button"
-							disabled={!canOpenImage}
-							title="Open final image in a new tab">Open Image</button
-						>
+						<div style="display: flex; flex-direction: column; gap: 0.8rem;">
+							<button
+								on:click={handleOpenImage}
+								class="button-like save-button"
+								disabled={!canOpenImage}
+								title="Open final image in a new tab">Open Image</button
+							>
+							<!-- Download PDF Button -->
+							<button
+								on:click={handleDownloadPdf}
+								class="button-like download-pdf-button"
+								disabled={!canDownloadPdf}
+								title={!canDownloadPdf
+									? 'Process an image first or wait for current process'
+									: 'Generate and download PDF'}
+							>
+								{#if isGeneratingPdf}
+									<span class="button-spinner"></span>
+									{loadingStep || 'Generating PDF...'}
+								{:else}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="16"
+										height="16"
+										fill="currentColor"
+										viewBox="0 0 16 16"
+										style="margin-right: 0.5em;"
+									>
+										<path
+											d="M4.603 14.087a.8.8 0 0 1-1.087.955l-4.2-3.001a.8.8 0 0 1-.033-1.11l2.141-2.263a.8.8 0 1 1 1.162 1.09l-1.28 1.358 3.136 2.24a.8.8 0 0 1 .033 1.11z"
+										/>
+										<path
+											fill-rule="evenodd"
+											d="M5.824 1.936a2.5 2.5 0 0 1 4.352 0l2.141 2.262a.8.8 0 0 1-.033 1.11l-4.2 3.001a.8.8 0 0 1-1.087-.955l1.28-1.358-3.136-2.24a.8.8 0 0 1-.033-1.11l2.141-2.263zM8 5.616a.5.5 0 0 1 .5.5v3.868a.5.5 0 0 1-1 0V6.116a.5.5 0 0 1 .5-.5zm0 7.25a.8.8 0 1 1 0-1.6.8.8 0 0 1 0 1.6z"
+										/>
+										<path
+											d="M12.25 2.642a1.5 1.5 0 0 0-2.75-1.053L8.64 2.5H7.36L6.5 1.589A1.5 1.5 0 0 0 3.75 2.642v10.716A1.5 1.5 0 0 0 5.25 14.9h5.5A1.5 1.5 0 0 0 12.25 13.358V2.642zm-1.5 0a.5.5 0 0 1 .5.5v10.716a.5.5 0 0 1-.5.5h-5.5a.5.5 0 0 1-.5-.5V3.142a.5.5 0 0 1 .5-.5h5.5z"
+										/>
+									</svg>
+									Download PDF
+								{/if}
+							</button>
+						</div>
 					</div>
 					<!-- Sidebar Error Message Area -->
 					{#if errorMessage}<p class="error-message sidebar-error">{errorMessage}</p>{/if}
@@ -963,6 +1067,10 @@
 		height: 100%;
 		min-height: 400px;
 	}
+	/* Added rule for initial state full radius */
+	.initial-upload-state:only-child {
+		border-radius: 12px;
+	}
 	.tool-description {
 		margin-bottom: 1.5rem;
 		color: var(--subtext0);
@@ -1003,12 +1111,13 @@
 	}
 	.toolbar-label {
 		font-size: 0.9rem;
-		color: var(--base);
+		color: var(--base); /* Adjusted */
 		margin-right: 0.5rem;
-		font-weight: 500;
+		font-weight: 600; /* Adjusted */
+		font-family: var(--font-header); /* Added */
 	}
 
-	/* --- MODIFIED Main Area Style --- */
+	/* --- Main Area Style --- */
 	.main-area {
 		grid-area: main;
 		overflow: hidden;
@@ -1018,23 +1127,23 @@
 		align-items: center;
 		padding: 1.2rem;
 		box-sizing: border-box;
-
-		/* --- SOLID BASE + GRID LINES BACKGROUND --- */
 		background-color: var(--base); /* Solid background color */
-		background-image:
+		background-image: /* Grid lines */
 			repeating-linear-gradient(
-				rgba(255, 255, 255, 0.15) 0 1px,
-				transparent 1px var(--grid-size)
+				/* Horizontal lines */ var(--surface0),
+				/* Adjusted color */ var(--surface0) 1px,
+				transparent 1px,
+				transparent var(--grid-size)
 			),
 			repeating-linear-gradient(
-				90deg,
-				rgba(255, 255, 255, 0.15) 0 1px,
-				transparent 1px var(--grid-size)
+				/* Vertical lines */ 90deg,
+				var(--surface0),
+				/* Adjusted color */ var(--surface0) 1px,
+				transparent 1px,
+				transparent var(--grid-size)
 			);
-		background-size: var(--grid-size, 20px) var(--grid-size, 20px); /* Size of one grid square */
-		/* --- END SOLID BASE + GRID LINES BACKGROUND --- */
+		background-size: var(--grid-size) var(--grid-size); /* Size of one grid square */
 	}
-	/* --- END MODIFIED Main Area Style --- */
 
 	.image-canvas-wrapper {
 		position: relative;
@@ -1067,10 +1176,11 @@
 	}
 	.image-canvas-wrapper canvas {
 		position: absolute; /* left/top set by JS */
-		width: auto;
-		height: auto;
+		width: auto; /* Set by JS */
+		height: auto; /* Set by JS */
 		touch-action: none;
 		pointer-events: auto;
+		display: none; /* Controlled reactively */
 	}
 	.main-area-overlay {
 		position: absolute;
@@ -1109,7 +1219,7 @@
 		width: var(--sidebar-width);
 		padding: 1.5rem;
 		overflow-y: auto;
-		border-left: 1px solid var(--overlay);
+		border-left: 1px solid var(--overlay0); /* Adjusted */
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
@@ -1130,7 +1240,7 @@
 		background-color: var(--mantle);
 	}
 	.sidebar-section.file-management {
-		background-color: var(--sapphire);
+		background-color: color-mix(in srgb, var(--sapphire) 85%, var(--mantle));
 		color: white;
 	}
 	.sidebar-section.file-management h4 {
@@ -1140,7 +1250,7 @@
 	.sidebar-section.file-management .filename {
 		background-color: var(--base);
 		color: var(--text);
-		border: 1px solid var(--overlay);
+		border: 1px solid var(--overlay0);
 	}
 	.sidebar-section.file-management .original-dims-info {
 		background: color-mix(in srgb, white 15%, transparent);
@@ -1152,18 +1262,10 @@
 		margin-bottom: 0.8rem;
 		font-size: 0.8rem;
 	}
-	.sidebar-section.file-management .change-button {
-		background-color: var(--base);
-		color: var(--sapphire);
-		border-color: var(--overlay);
-	}
-	.sidebar-section.file-management .change-button:hover:not(:disabled) {
-		background-color: var(--overlay);
-		color: var(--sapphire);
-		border-color: var(--overlay);
-	}
+	/* Removed Change Button styles */
+
 	.sidebar-section.details {
-		background-color: var(--pink);
+		background-color: color-mix(in srgb, var(--pink) 85%, var(--mantle));
 		color: white;
 	}
 	.sidebar-section.details h4 {
@@ -1176,8 +1278,9 @@
 		font-size: 0.85rem;
 		line-height: 1.4;
 	}
+
 	.sidebar-section.controls {
-		background-color: var(--teal);
+		background-color: color-mix(in srgb, var(--teal) 85%, var(--mantle));
 		color: white;
 	}
 	.sidebar-section.controls h4 {
@@ -1187,7 +1290,7 @@
 	.sidebar-section.controls .history-button {
 		background-color: var(--base);
 		color: var(--teal);
-		border-color: var(--overlay);
+		border-color: var(--overlay0);
 	}
 	.sidebar-section.controls .history-button:hover:not(:disabled) {
 		background-color: var(--teal);
@@ -1195,16 +1298,19 @@
 		border-color: var(--teal);
 	}
 	.sidebar-section.controls .history-button:disabled {
-		background-color: var(--overlay);
+		background-color: var(--overlay0);
 		color: var(--subtext0);
-		border-color: var(--overlay);
+		border-color: var(--overlay0);
 	}
+
 	.sidebar-section.download-section {
 		padding: 0;
 		box-shadow: none;
 		background: none;
 		margin-top: -0.5rem;
 	}
+	/* --- End Themed Sidebar Sections --- */
+
 	.sidebar-section h4 {
 		font-family: var(--font-header);
 		margin: 0 0 1rem 0;
@@ -1222,7 +1328,7 @@
 		border-radius: 4px;
 		overflow-wrap: break-word;
 		word-break: break-all;
-		border: 1px solid var(--overlay);
+		border: 1px solid var(--overlay0); /* Adjusted */
 		line-height: 1.4;
 	}
 	.button-like {
@@ -1230,7 +1336,7 @@
 		align-items: center;
 		justify-content: center;
 		padding: 0.7rem 1.5rem;
-		border: 1px solid var(--overlay);
+		border: 1px solid var(--overlay1); /* Adjusted */
 		border-radius: 8px;
 		font-family: var(--font-body);
 		font-size: 0.95rem;
@@ -1247,7 +1353,7 @@
 		line-height: 1.2;
 		gap: 0.5rem;
 		user-select: none;
-		background-color: var(--base);
+		background-color: var(--surface1); /* Adjusted */
 		color: var(--text);
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 		width: 100%;
@@ -1260,22 +1366,26 @@
 		box-shadow: none;
 		transform: none;
 		filter: grayscale(30%);
-		background-color: var(--overlay);
-		border-color: var(--overlay);
+		background-color: var(--surface0); /* Adjusted */
+		border-color: var(--overlay0); /* Adjusted */
+		color: var(--subtext0); /* Added */
 	}
-	.button-like:not(:disabled):not(.disabled):hover {
+	.button-like:not(:disabled):hover {
 		transform: translateY(-2px);
 		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+		background-color: var(--surface2); /* Added */
+		border-color: var(--overlay2); /* Added */
 	}
-	.button-like:active:not(:disabled):not(.disabled) {
+	.button-like:active:not(:disabled) {
 		transform: translateY(0px);
 		box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 		filter: brightness(0.98);
 	}
+
 	.initial-upload-state .file-label {
-		border: 2px dashed var(--overlay);
+		border: 2px dashed var(--base); /* Adjusted */
 		background-color: var(--mantle);
-		color: var(--base);
+		color: var(--base); /* Adjusted */
 		width: 100%;
 		max-width: 350px;
 		box-shadow: none;
@@ -1284,54 +1394,76 @@
 			border-color 0.2s ease,
 			color 0.2s ease;
 	}
-	.initial-upload-state .file-label:hover {
-		background-color: var(--crust);
+	.initial-upload-state .file-label:hover:not(:disabled) {
+		background-color: var(--crust); /* Adjusted */
 		border-color: var(--blue);
 		color: var(--blue);
 	}
 	.apply-button {
 		background-color: var(--green);
-		color: white;
+		color: var(--crust); /* Adjusted */
 		border-color: var(--green);
+		font-weight: 700; /* Added */
 	}
 	.apply-button:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--green) 90%, black);
-		border-color: color-mix(in srgb, var(--green) 90%, black);
-		color: white;
+		background-color: color-mix(in srgb, var(--green) 90%, white); /* Adjusted */
+		border-color: color-mix(in srgb, var(--green) 90%, white); /* Adjusted */
+		color: var(--crust); /* Adjusted */
+	}
+	.apply-button:disabled {
+		background-color: var(--overlay0); /* Adjusted */
+		color: var(--subtext0); /* Added */
+		border-color: var(--overlay0); /* Added */
 	}
 	.toolbar-button {
 		width: auto !important;
 		padding: 0.5rem 1.2rem;
 	}
-	.change-button {
-		background-color: var(--base);
-		color: var(--sapphire);
-		border-color: var(--overlay);
-		padding: 0.6rem 1rem;
-		font-size: 0.9rem;
-		box-shadow: none;
-	}
-	.change-button:hover:not(:disabled) {
-		background-color: var(--sapphire);
-		color: white;
-		border-color: var(--sapphire);
-	}
+	/* Removed Change Button styles */
 	.save-button {
 		background-color: var(--blue);
-		color: white;
+		color: var(--crust); /* Adjusted */
 		border-color: var(--blue);
+		font-weight: 700; /* Added */
 	}
 	.save-button:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--blue) 90%, black);
-		border-color: color-mix(in srgb, var(--blue) 90%, black);
+		background-color: color-mix(in srgb, var(--blue) 90%, white); /* Adjusted */
+		border-color: color-mix(in srgb, var(--blue) 90%, white); /* Adjusted */
 	}
+	.save-button:disabled {
+		background-color: var(--overlay0); /* Adjusted */
+		color: var(--subtext0); /* Added */
+		border-color: var(--overlay0); /* Added */
+	}
+	/* Style for the new PDF button */
+	.download-pdf-button {
+		background-color: var(--red); /* Use red for PDF */
+		color: var(--crust); /* Dark text on light red */
+		border-color: var(--red);
+		font-weight: 700; /* Added */
+	}
+	.download-pdf-button:hover:not(:disabled) {
+		background-color: color-mix(in srgb, var(--red) 90%, white); /* Adjusted */
+		border-color: color-mix(in srgb, var(--red) 90%, white); /* Adjusted */
+	}
+	.download-pdf-button:disabled {
+		background-color: var(--overlay0); /* Adjusted */
+		color: var(--subtext0); /* Added */
+		border-color: var(--overlay0); /* Added */
+	}
+	.download-pdf-button .button-spinner {
+		/* Spinner color for PDF button */
+		border-color: color-mix(in srgb, var(--crust) 50%, transparent); /* Adjusted */
+		border-top-color: var(--crust); /* Adjusted */
+	}
+
 	.history-button {
 		flex: 1;
 		padding: 0.5rem 0.8rem;
 		font-size: 0.85rem;
-		background-color: var(--mantle);
+		background-color: var(--base); /* Adjusted */
 		color: var(--teal);
-		border: 1px solid var(--overlay);
+		border: 1px solid var(--overlay0); /* Adjusted */
 		box-shadow: none;
 		gap: 0.4rem;
 		width: auto;
@@ -1348,9 +1480,9 @@
 		border-color: var(--teal);
 	}
 	.history-button:disabled {
-		background-color: var(--overlay);
+		background-color: var(--overlay0); /* Adjusted */
 		color: var(--subtext0);
-		border-color: var(--overlay);
+		border-color: var(--overlay0); /* Adjusted */
 	}
 	.control-item {
 		margin-bottom: 0.8rem;
@@ -1364,9 +1496,9 @@
 		justify-content: space-between;
 	}
 	.error-message {
-		background-color: color-mix(in srgb, var(--red) 10%, var(--base));
+		background-color: color-mix(in srgb, var(--red) 15%, var(--mantle)); /* Adjusted */
 		color: var(--red);
-		border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
+		border: 1px solid color-mix(in srgb, var(--red) 50%, transparent); /* Adjusted */
 		padding: 0.8rem 1.2rem;
 		border-radius: 6px;
 		margin: 1rem auto 0 auto;
@@ -1391,7 +1523,7 @@
 		border-radius: 6px;
 	}
 	.spinner {
-		border: 4px solid var(--overlay);
+		border: 4px solid var(--overlay1); /* Adjusted */
 		border-top: 4px solid var(--blue);
 		border-radius: 50%;
 		width: 35px;
@@ -1410,10 +1542,16 @@
 		margin: 0 0.5em 0 0;
 		line-height: 0;
 	}
+	/* Adjusted spinner colors */
 	.apply-button .button-spinner {
-		border-color: color-mix(in srgb, white 50%, transparent);
-		border-top-color: white;
+		border-color: color-mix(in srgb, var(--crust) 50%, transparent);
+		border-top-color: var(--crust);
 	}
+	.save-button .button-spinner {
+		border-color: color-mix(in srgb, var(--crust) 50%, transparent);
+		border-top-color: var(--crust);
+	}
+
 	@keyframes spin {
 		0% {
 			transform: rotate(0deg);
@@ -1426,6 +1564,7 @@
 		:root {
 			--editor-v-margin: 0rem;
 			--editor-fixed-height: auto;
+			--sidebar-width: 100%; /* Added */
 		}
 		.editor-wrapper {
 			margin: 0;
@@ -1438,13 +1577,26 @@
 			box-shadow: none;
 			height: auto;
 			min-height: 100vh;
+			max-height: none; /* Added */
 		}
 		.editor-interface {
 			grid-template-areas: 'toolbar' 'main' 'sidebar';
 			grid-template-rows: var(--toolbar-height) minmax(300px, 55vh) auto;
 			grid-template-columns: 1fr;
 			height: auto;
+			border-radius: 0; /* Added */
 		}
+		/* Added resets for rounding */
+		.top-toolbar {
+			border-radius: 0;
+		}
+		.main-area {
+			border-radius: 0;
+		}
+		.right-sidebar {
+			border-radius: 0;
+		}
+
 		.main-area {
 			padding: 0.8rem;
 		}
@@ -1453,7 +1605,7 @@
 			max-height: none;
 			height: auto;
 			border-left: none;
-			border-top: 1px solid var(--overlay);
+			border-top: 1px solid var(--overlay0); /* Adjusted */
 			box-shadow: none;
 			padding: 1rem;
 			gap: 1rem;

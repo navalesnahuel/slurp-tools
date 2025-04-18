@@ -46,4 +46,16 @@
     /* For headers */
     --font-body: 'Geist', sans-serif;
     /* For body text */
+    --primary-accent: var(--blue);
+    --success: var(--green);
+    --warning: var(--yellow);
+    --danger: var(--red);
+    --info: var(--sky);
+
+    /* Layout Variables (Can be overridden per page if needed) */
+    --toolbar-height: 60px;
+    --sidebar-width: 280px;
+    --grid-size: 20px;
+    --editor-v-margin: 3rem;
+    --editor-fixed-height: calc(90vh - var(--editor-v-margin) - 1px);
 }
