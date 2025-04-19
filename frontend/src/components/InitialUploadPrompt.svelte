@@ -49,7 +49,7 @@
 		padding: 2rem;
 		text-align: center;
 		background-color: var(--base);
-		border-radius: 12px; /* Full radius when it's the only thing shown */
+		border-radius: 12px;
 		height: 100%;
 		min-height: 400px;
 	}
@@ -73,14 +73,13 @@
 		margin-bottom: 1rem;
 	}
 
-	/* Button Style */
 	.file-label.button-like {
 		display: inline-flex;
-		flex-direction: column; /* Stack icon and text */
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		padding: 0.9rem 2rem; /* Slightly larger padding */
-		border: 2px dashed var(--overlay); /* Dashed border */
+		padding: 0.9rem 2rem;
+		border: 2px dashed var(--overlay);
 		border-radius: 8px;
 		font-family: var(--font-body);
 		font-size: 0.95rem;
@@ -95,10 +94,10 @@
 			box-shadow 0.2s ease;
 		text-decoration: none;
 		line-height: 1.2;
-		gap: 0; /* Remove gap for stacked */
+		gap: 0;
 		user-select: none;
-		background-color: var(--mantle); /* Darker background */
-		color: var(--base); /* Lighter text */
+		background-color: var(--mantle);
+		color: var(--base);
 		box-shadow: none;
 		min-width: 220px;
 		max-width: 280px;
@@ -116,9 +115,9 @@
 		filter: brightness(0.95);
 	}
 	.file-label.button-like svg {
-		width: 32px; /* Larger icon */
+		width: 32px;
 		height: 32px;
-		margin-bottom: 0.6rem; /* Space between icon and text */
+		margin-bottom: 0.6rem;
 	}
 
 	@media (max-width: 480px) {

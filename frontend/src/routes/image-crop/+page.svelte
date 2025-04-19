@@ -9,9 +9,8 @@
 	import { loadCropperAssetsIfNeeded, destroyCropperInstance } from '$lib/utils/cropperUtils.js';
 	import { applyCropFilter } from '$lib/services/imageApi.js';
 
-	// --- Component State specific to Cropper ---
-	let imageElement = null; // bind:this
-	let cropperInstance = null; // <<< Variable local para la instancia
+	let imageElement = null;
+	let cropperInstance = null;
 	let zoom = 100;
 	let initialZoomRatio = 1;
 	let isUpdatingFromSlider = false;
@@ -19,78 +18,50 @@
 	let aspectRatioLabel = 'Free';
 	let croppedAreaPixels = null;
 
-	// --- Store Subscriptions ---
 	let imageUUID, imageUrl, isLoading, isApplying, errorMessage;
 	const unsubscribeStore = imageEditorStore.subscribe((state) => {
-		// Solo actualiza si el valor del store es diferente
 		let shouldReinitCropper = false;
 		if (imageUrl !== state.imageUrl && state.imageUrl) {
-			// Si la URL cambia a una nueva imagen válida, necesitamos reinit.
-			// El 'on:load' se encargará de llamar a initializeCropper eventualmente.
-			// Pero SIEMPRE destruimos la instancia vieja si la URL cambia.
-			console.log('[CropPage] ImageURL changed in store. Destroying old Cropper if exists.');
-			cropperInstance = destroyCropperInstance(cropperInstance);
-			croppedAreaPixels = null; // Limpia datos viejos
-			imageUrl = state.imageUrl; // Actualiza la URL local
-		} else if (!state.imageUrl && cropperInstance) {
-			// Si la URL se limpia (reset), destruye cropper
-			console.log('[CropPage] Image URL cleared in store. Destroying Cropper.');
 			cropperInstance = destroyCropperInstance(cropperInstance);
 			croppedAreaPixels = null;
-			imageUrl = state.imageUrl; // Actualiza URL local a vacía
+			imageUrl = state.imageUrl;
+		} else if (!state.imageUrl && cropperInstance) {
+			cropperInstance = destroyCropperInstance(cropperInstance);
+			croppedAreaPixels = null;
+			imageUrl = state.imageUrl;
 		}
 
-		// Actualiza otros estados
 		if (imageUUID !== state.imageUUID) imageUUID = state.imageUUID;
 		if (isLoading !== state.isLoading) isLoading = state.isLoading;
 		if (isApplying !== state.isApplying) isApplying = state.isApplying;
 		if (errorMessage !== state.errorMessage) errorMessage = state.errorMessage;
 	});
 
-	// --- Image Load/Error Handlers ---
 	async function handleImageLoad(event) {
-		// Marcar como async
 		if (!event.target) return;
 		const target = event.target;
 		const dimensions = { width: target.naturalWidth, height: target.naturalHeight };
-		console.log(
-			`[CropPage] handleImageLoad: Image loaded successfully. Natural Dims: ${dimensions.width}x${dimensions.height}`
-		);
 
-		// 1. Señala al store que la carga terminó y pasa las dimensiones
 		imageEditorStore.imageLoadComplete(dimensions);
 
-		// 2. Destruye explícitamente CUALQUIER instancia vieja de cropper ANTES de reintentar.
-		// Esto es crucial después de Undo/Redo.
-		console.log(
-			'[CropPage] handleImageLoad: Destroying potentially existing Cropper instance...'
-		);
-		cropperInstance = destroyCropperInstance(cropperInstance); // Asegura que la variable local se resetee a null
-		croppedAreaPixels = null; // Limpia los datos de selección viejos
+		cropperInstance = destroyCropperInstance(cropperInstance);
+		croppedAreaPixels = null;
 
-		// 3. Intenta inicializar Cropper (asegúrate de que los assets estén cargados)
 		try {
 			await loadCropperAssetsIfNeeded();
-			await tick(); // Espera que el DOM se actualice
-			initializeCropper(); // Ahora debería poder inicializar porque cropperInstance es null
+			await tick();
+			initializeCropper();
 		} catch (err) {
-			console.error(
-				'[CropPage] Cropper asset loading/initialization failed after image load:',
-				err
-			);
 			imageEditorStore.imageLoadError(`Failed to load cropping library: ${err.message}`);
 		}
 	}
 
 	function handleImageError() {
-		console.error('[CropPage] handleImageError: Image failed to load src:', imageUrl);
 		imageEditorStore.imageLoadError('Error: Failed to load image preview.');
-		cropperInstance = destroyCropperInstance(cropperInstance); // Asegura limpiar si falla la carga
+		cropperInstance = destroyCropperInstance(cropperInstance);
 	}
 
-	// --- Cropper Logic ---
 	async function initializeCropper() {
-		// Revisa condiciones OTRA VEZ por si el estado cambió mientras esperábamos tick/assets
 		if (
 			!imageElement ||
 			!imageUrl ||
@@ -100,17 +71,8 @@
 			isLoading ||
 			isApplying
 		) {
-			console.warn(
-				'[CropPage] Cropper init skipped (inside initializeCropper). Conditions:',
-				{
-					/*...*/
-				}
-			);
 			return;
 		}
-
-		console.log('[CropPage] Initializing Cropper (inside initializeCropper)...');
-		// No necesitamos tick aquí porque ya esperamos en handleImageLoad
 
 		if (
 			imageElement &&
@@ -120,9 +82,7 @@
 			!isApplying
 		) {
 			try {
-				// No es necesario ocultar/mostrar opacidad si el flujo es correcto
 				cropperInstance = new Cropper(imageElement, {
-					// ... (mismas opciones de configuración de Cropper que antes) ...
 					aspectRatio: aspect,
 					viewMode: 1,
 					dragMode: 'move',
@@ -145,29 +105,25 @@
 					crop: updateCropDataFromEvent,
 					zoom: updateSliderFromCropper,
 					ready: () => {
-						console.log('[CropPage] Cropper ready.');
 						const canvasData = cropperInstance.getCanvasData();
 						const imgData = cropperInstance.getImageData();
 						initialZoomRatio =
 							imgData.naturalWidth > 0 ? canvasData.width / imgData.naturalWidth : 1;
 						zoom = 100;
-						updateCropData(); // Obtiene datos iniciales
+						updateCropData();
 					}
 				});
 				if (!isNaN(aspect)) {
 					cropperInstance.setAspectRatio(aspect);
 				}
 			} catch (err) {
-				console.error('[CropPage] Failed to initialize cropper:', err);
 				imageEditorStore.imageLoadError(`Failed to initialize cropper: ${err.message}`);
-				cropperInstance = destroyCropperInstance(cropperInstance); // Limpia en caso de error
+				cropperInstance = destroyCropperInstance(cropperInstance);
 			}
 		} else {
-			console.warn('[CropPage] Cropper init skipped (final check). Conditions changed.');
 		}
 	}
 
-	// updateCropDataFromEvent, updateCropData, updateCroppedAreaPixels (sin cambios)
 	function updateCropDataFromEvent(event) {
 		if (cropperInstance && !isApplying) {
 			updateCroppedAreaPixels(cropperInstance.getData(true));
@@ -193,7 +149,6 @@
 		}
 	}
 
-	// updateAspectRatio (sin cambios)
 	function updateAspectRatio(newAspect, label) {
 		if (isLoading || isApplying) return;
 		aspect = newAspect;
@@ -203,7 +158,6 @@
 		}
 	}
 
-	// updateZoomFromSlider (sin cambios)
 	function updateZoomFromSlider(event) {
 		if (!cropperInstance || initialZoomRatio <= 0 || isLoading || isApplying) return;
 		const imgData = cropperInstance.getImageData();
@@ -215,7 +169,6 @@
 		try {
 			cropperInstance.zoomTo(targetAbsoluteRatio);
 		} catch (e) {
-			console.warn('Error zooming:', e);
 		} finally {
 			tick().then(() => {
 				isUpdatingFromSlider = false;
@@ -223,7 +176,6 @@
 		}
 	}
 
-	// updateSliderFromCropper (sin cambios)
 	function updateSliderFromCropper(event) {
 		if (
 			!cropperInstance ||
@@ -247,19 +199,12 @@
 		}
 	}
 
-	// handleApplyCrop (eliminamos la llamada a destroyCropperInstance aquí)
 	async function handleApplyCrop() {
 		if (!cropperInstance || !imageUUID || isApplying || isLoading) return;
 		const cropData = cropperInstance.getData(true);
 		if (!cropData || cropData.width <= 0 || cropData.height <= 0) {
-			console.warn('Invalid crop area selected.');
 			return;
 		}
-
-		// *** YA NO destruimos cropper aquí ***
-		// cropperInstance = destroyCropperInstance(cropperInstance);
-		// croppedAreaPixels = null;
-		// La destrucción ahora ocurre en handleImageLoad DESPUÉS del refresh
 
 		await imageEditorStore.applyFilter(
 			(uuid) =>
@@ -273,34 +218,24 @@
 		);
 	}
 
-	// --- Lifecycle ---
 	onMount(async () => {
-		// Solo carga assets, la inicialización depende de la carga de la imagen
 		try {
 			await loadCropperAssetsIfNeeded();
-		} catch (err) {
-			console.error('Failed to load Cropper assets onMount:', err);
-		}
+		} catch (err) {}
 	});
 
 	onDestroy(() => {
 		unsubscribeStore();
-		cropperInstance = destroyCropperInstance(cropperInstance); // Asegura limpieza al salir
+		cropperInstance = destroyCropperInstance(cropperInstance);
 		imageEditorStore.cleanupBlobUrl();
 	});
 
-	// --- Reactive Computations ---
-	// Mantenemos estos para habilitar/deshabilitar controles específicos de Cropper
 	$: canControlCropper = !!cropperInstance && !isLoading && !isApplying;
 	$: canApply =
 		canControlCropper &&
 		!!croppedAreaPixels &&
 		croppedAreaPixels.width > 0 &&
 		croppedAreaPixels.height > 0;
-
-	// --- Quitamos el reactive effect para inicializar/destruir cropper basado en imageUrl ---
-	// $: if (imageUrl && imageElement ...) // <-- ELIMINADO
-	// El flujo ahora es: imageUrl cambia -> <img> on:load -> handleImageLoad -> destroy -> initialize
 </script>
 
 <svelte:head>
@@ -411,11 +346,11 @@
 <style>
 	.toolbar-label {
 		font-size: 0.9rem;
-		color: var(--base); /* Más contraste sobre fondo oscuro */
+		color: var(--base);
 		font-weight: 500;
-		display: inline-block; /* Asegura que permanezca en línea */
-		align-self: center; /* Centrado vertical */
-		white-space: nowrap; /* Evita que se rompa en móviles */
+		display: inline-block;
+		align-self: center;
+		white-space: nowrap;
 	}
 
 	.aspect-ratio-controls {
@@ -424,16 +359,16 @@
 		border-radius: 6px;
 		overflow: hidden;
 		border: 1px solid var(--surface1);
-		height: 32px; /* Altura fija para asegurar consistencia */
+		height: 32px;
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-		margin-left: 0.5rem; /* Espacio después de la etiqueta */
+		margin-left: 0.5rem;
 	}
 
 	div[slot='toolbar-left'] {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem; /* Espacio entre elementos */
-		height: 100%; /* Asegura altura completa */
+		gap: 0.5rem;
+		height: 100%;
 	}
 
 	.aspect-ratio-controls button {
@@ -442,12 +377,12 @@
 		border-right: 1px solid var(--surface1);
 		color: var(--text);
 		padding: 0 1rem;
-		height: 100%; /* Ocupa toda la altura */
+		height: 100%;
 		font-size: 0.85rem;
 		cursor: pointer;
 		transition: all 0.15s ease;
 		flex: 1;
-		min-width: 40px; /* Ancho mínimo para evitar botones muy estrechos */
+		min-width: 40px;
 	}
 
 	.aspect-ratio-controls button:first-child {
@@ -484,7 +419,7 @@
 		border: none;
 		font-weight: 500;
 		font-size: 0.9rem;
-		height: 32px; /* Misma altura que los botones de ratio */
+		height: 32px;
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 	}
 
@@ -504,7 +439,7 @@
 		opacity: 0.6;
 		filter: grayscale(30%);
 	}
-	/* Opcional: estilo para el spinner dentro del botón */
+
 	.button-spinner {
 		display: inline-block;
 		width: 1rem;
@@ -525,7 +460,6 @@
 		}
 	}
 
-	/* --- ESTILOS PARA MAIN AREA (Sin cambios) --- */
 	.cropper-main-content {
 		width: 100%;
 		height: 100%;
@@ -552,12 +486,11 @@
 		padding: 1rem 0;
 	}
 
-	/* --- ESTILOS ESPECÍFICOS PARA LA SIDEBAR DE CROP --- */
 	.sidebar-section {
 		padding: 1.2rem 1.5rem;
 		border-radius: 10px;
 		box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
-		color: var(--base); /* Color de texto por defecto para fondos claros */
+		color: var(--base);
 		transition:
 			transform 0.2s ease-out,
 			box-shadow 0.2s ease-out;
@@ -574,70 +507,59 @@
 		font-size: 1rem;
 		font-weight: 600;
 		padding-bottom: 0.6rem;
-		color: inherit; /* Hereda color de la sección */
+		color: inherit;
 		border-bottom: 1px solid color-mix(in srgb, currentColor 25%, transparent);
 	}
 
-	/* 1. Sección Archivo (Azul Claro en la ref) */
 	.section-file {
-		background-color: var(--blue); /* Fondo Azul Claro */
-		color: var(--crust); /* Texto oscuro */
+		background-color: var(--blue);
+		color: var(--crust);
 	}
-	/* El componente FileManagementSidebar ya debería tener estilos internos correctos */
 
-	/* 2. Sección Detalles (Fondo Oscuro por defecto en la ref) */
 	.section-details {
 		background-color: var(--mantle);
-		color: var(--base); /* Texto claro sobre fondo oscuro */
+		color: var(--base);
 	}
 	.section-details h4 {
-		color: var(--flamingo); /* Título en Rosa */
+		color: var(--flamingo);
 		border-bottom-color: color-mix(in srgb, var(--flamingo) 50%, transparent);
 	}
-	/* --- CORRECCIÓN LAYOUT DETAILS-GRID --- */
+
 	.section-details .details-grid {
 		display: grid;
-		/* Dos columnas: Etiqueta (auto) y Valor (1fr) */
+
 		grid-template-columns: auto 1fr;
-		/* Espacio entre filas y columnas */
-		gap: 0.4rem 1rem; /* Más espacio horizontal */
-		font-size: 0.85rem; /* Un poco más grande */
+
+		gap: 0.4rem 1rem;
+		font-size: 0.85rem;
 		font-family: var(--font-mono);
-		color: var(--base); /* Texto claro */
+		color: var(--base);
 	}
 	.section-details .details-grid span:nth-child(odd) {
-		/* Estilo para Etiquetas (W:, H:, X:, Y:) */
-		opacity: 0.8; /* Ligeramente menos énfasis */
+		opacity: 0.8;
 		text-align: right;
 		white-space: nowrap;
 		font-weight: 500;
-		padding-right: 0.5em; /* Espacio antes del valor */
+		padding-right: 0.5em;
 	}
 	.section-details .details-grid span:nth-child(even) {
-		/* Estilo para Valores (719px, 1279px, etc.) */
 		font-weight: 600;
-		text-align: left; /* Alineado a la izquierda */
-		/* Sin fondo extra para los valores */
-		/* background: color-mix(in srgb, var(--base) 15%, transparent); */
-		/* padding: 0.1rem 0.4rem; */
-		/* border-radius: 3px; */
+		text-align: left;
 	}
 	.section-details .placeholder-text-small {
 		font-size: 0.8rem;
-		color: var(--subtext0); /* Placeholder claro sobre fondo oscuro */
+		color: var(--subtext0);
 		text-align: center;
 		padding: 0.5rem 0;
 		margin: 0;
 	}
 
-	/* 3. Sección Controles (Fondo Oscuro por defecto en la ref) */
 	.section-controls {
-		/* background-color: var(--teal); <-- Quitamos fondo teal */
-		background-color: var(--mantle); /* Fondo oscuro */
-		color: var(--base); /* Texto claro */
+		background-color: var(--mantle);
+		color: var(--base);
 	}
 	.section-controls h4 {
-		color: var(--teal); /* Título en Teal */
+		color: var(--teal);
 		border-bottom-color: color-mix(in srgb, var(--teal) 50%, transparent);
 	}
 	.section-controls .control-item {
@@ -663,8 +585,8 @@
 		flex-grow: 1;
 		height: 8px;
 		cursor: pointer;
-		accent-color: var(--base); /* Color del thumb */
-		/* Usamos surface0 para el track del slider sobre fondo mantle */
+		accent-color: var(--base);
+
 		background: var(--surface0);
 		border-radius: 4px;
 		margin: 0;
@@ -690,25 +612,22 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	/* 4. Sección Historial (Fondo Teal Claro en la ref) */
 	.section-history {
-		background-color: var(--teal); /* Fondo Teal Claro */
-		color: var(--crust); /* Texto oscuro */
+		background-color: var(--teal);
+		color: var(--crust);
 	}
 	.section-history h4 {
-		color: var(--crust); /* Texto oscuro */
-		/* Borde inferior oscuro que contraste */
+		color: var(--crust);
+
 		border-bottom-color: color-mix(in srgb, var(--crust) 30%, transparent);
 	}
-	/* El componente HistoryControlsSidebar define los botones internos */
-	/* Asegúrate que el componente use background: var(--crust); color: var(--sky); para los botones */
-	/* Para asegurar el color del texto del botón sobre fondo claro: */
+
 	.section-history .history-button {
-		background-color: var(--crust); /* Fondo oscuro */
-		color: var(--sky); /* Texto/icono celeste */
+		background-color: var(--crust);
+		color: var(--sky);
 	}
 	.section-history .history-button:hover:not(:disabled) {
-		background-color: var(--mantle); /* Oscuro al hover */
+		background-color: var(--mantle);
 	}
 	.section-history .history-button:disabled {
 		background-color: var(--surface0) !important;
@@ -718,14 +637,9 @@
 		filter: grayscale(50%);
 	}
 
-	/* Estilos Download Button (Rosa en la ref) */
-	/* El componente DownloadSidebar necesita un ajuste o una clase pasada */
-	/* Asumamos que DownloadSidebar tiene un <button class="button-like save-button {extraClass}"> */
-	/* Si no, ajustamos el estilo global del save-button aquí */
 	:global(.download-section .save-button) {
-		/* Forma de apuntar si no pasamos clase */
-		background-color: var(--pink) !important; /* Fondo Rosa */
-		color: var(--crust) !important; /* Texto oscuro */
+		background-color: var(--pink) !important;
+		color: var(--crust) !important;
 		border: none !important;
 	}
 	:global(.download-section .save-button:hover:not(:disabled)) {
@@ -738,7 +652,6 @@
 		filter: grayscale(30%);
 	}
 
-	/* --- Mobile Adjustments (Sin cambios) --- */
 	@media (max-width: 480px) {
 		.aspect-ratio-controls button {
 			padding: 0.4rem 0.6rem;

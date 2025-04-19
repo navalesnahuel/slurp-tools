@@ -9,7 +9,6 @@
 	<Header />
 
 	<main>
-		<!-- Ensure this element grows -->
 		<slot />
 	</main>
 
@@ -18,15 +17,14 @@
 
 <style>
 	.app-container {
-		min-height: 100vh; /* Crucial */
+		min-height: 100vh;
 		display: flex;
-		flex-direction: column; /* Crucial */
+		flex-direction: column;
 		background-color: var(--base);
 	}
 
 	main {
-		flex-grow: 1; /* Crucial: Allows main to expand and push footer */
+		flex-grow: 1;
 		width: 100%;
-		/* max-width/padding already handled inside +page.svelte's sections */
 	}
 </style>

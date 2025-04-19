@@ -24,12 +24,12 @@
 		padding: 2rem;
 		text-align: center;
 		background-color: var(--base);
-		border-radius: 12px 12px 0 0; /* Only top rounding when part of layout */
+		border-radius: 12px 12px 0 0;
 		height: 100%;
 		min-height: 400px;
 	}
 	.loading-state:only-child {
-		border-radius: 12px; /* Full radius when shown alone */
+		border-radius: 12px;
 	}
 	.spinner {
 		border: 4px solid var(--surface1);

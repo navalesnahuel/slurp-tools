@@ -1,5 +1,4 @@
 // src/lib/stores/imageEditorStore.js
-// Manages the core state for single-image editing tools
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import * as imageApi from '$lib/services/imageApi.js';
@@ -10,7 +9,7 @@ const initialState = {
 	imageUUID: null,
 	imageUrl: '',
 	currentBlobUrl: null,
-	imageInfo: null, // Should contain { UUID, Version, FilePath } from API
+	imageInfo: null,
 	originalDimensions: null,
 	isLoading: false,
 	isApplying: false,
@@ -21,7 +20,6 @@ const initialState = {
 function createImageEditorStore() {
 	const { subscribe, set, update } = writable({ ...initialState });
 
-	// --- Internal Helpers ---
 	function _setLoading(loading, step = '') {
 		update((state) => ({
 			...state,
@@ -43,8 +41,6 @@ function createImageEditorStore() {
 	}
 
 	function _setError(message) {
-		// Primarily for non-filter/non-history errors now
-		console.error('Image Editor Store Error:', message);
 		update((state) => ({
 			...state,
 			errorMessage: message,
@@ -57,12 +53,9 @@ function createImageEditorStore() {
 	function _cleanupBlobUrl() {
 		update((state) => {
 			if (state.currentBlobUrl && state.currentBlobUrl.startsWith('blob:')) {
-				console.log('[Store] Revoking Blob URL:', state.currentBlobUrl);
 				try {
 					URL.revokeObjectURL(state.currentBlobUrl);
-				} catch (e) {
-					console.warn('Error revoking blob URL', e);
-				}
+				} catch (e) {}
 				return { ...state, currentBlobUrl: null };
 			}
 			return state;
@@ -73,12 +66,9 @@ function createImageEditorStore() {
 		const currentError = get({ subscribe }).errorMessage;
 		_cleanupBlobUrl();
 		set({ ...initialState, errorMessage: keepError ? currentError : '' });
-		console.log('[Store] State Reset.');
 	}
 
-	// --- Actions ---
 	async function selectAndUpload(file) {
-		// ... (no changes from previous correct version) ...
 		if (!file || !browser) return;
 		_resetState();
 		_setLoading(true, 'Uploading image...');
@@ -93,7 +83,7 @@ function createImageEditorStore() {
 		}));
 		try {
 			const result = await imageApi.uploadImage(file);
-			console.log('[Store] Upload successful:', result);
+
 			update((state) => ({
 				...state,
 				imageUUID: result.UUID,
@@ -110,13 +100,12 @@ function createImageEditorStore() {
 	}
 
 	async function refreshImage(resetApplying = true) {
-		// ... (no changes from previous correct version) ...
 		const currentUUID = get({ subscribe }).imageUUID;
 		if (!currentUUID || !browser) {
 			_resetState();
 			return;
 		}
-		console.log('[Store] Refreshing image for UUID:', currentUUID);
+
 		_setLoading(true, 'Loading image preview...');
 		if (resetApplying) _setApplying(false);
 		_cleanupBlobUrl();
@@ -126,8 +115,6 @@ function createImageEditorStore() {
 	}
 
 	function imageLoadComplete(dimensions) {
-		// ... (no changes from previous correct version) ...
-		console.log('[Store] Image load signaled complete. Dimensions:', dimensions);
 		update((state) => ({
 			...state,
 			isLoading: false,
@@ -138,55 +125,39 @@ function createImageEditorStore() {
 	}
 
 	function imageLoadError(errorMsg = 'Failed to load image preview.') {
-		// ... (no changes from previous correct version) ...
-		console.error('[Store] Image load signaled error.');
 		_setError(errorMsg);
 		update((state) => ({ ...state, imageUrl: '', originalDimensions: null }));
 	}
 
 	async function applyFilter(filterFn, filterName = 'filter') {
 		const state = get({ subscribe });
-		// Basic guard: must have UUID and not be busy
+
 		if (!state.imageUUID || state.isApplying || state.isLoading) {
-			console.warn(`[Store] Cannot apply ${filterName}, no UUID or already busy.`);
 			return;
 		}
 
-		console.log(`[Store] Applying ${filterName}...`);
 		_setApplying(true, `Applying ${filterName}...`);
 
 		try {
-			const result = await filterFn(state.imageUUID); // Call the specific API function
-			console.log(`[Store] ${filterName} successful:`, result);
+			const result = await filterFn(state.imageUUID);
 
-			// Update state with the new info BEFORE refreshing
 			update((s) => ({
 				...s,
-				imageUUID: result.UUID, // Update just in case
-				imageInfo: result // Store the NEW version info
-				// Keep isLoading/isApplying true until refresh->load completes
+				imageUUID: result.UUID,
+				imageInfo: result
 			}));
 
-			// Refresh the image view
 			await refreshImage(false);
 		} catch (error) {
-			// *** SILENT ERROR HANDLING for filters/history ***
-			console.error(`[Store] ${filterName} API Failed:`, error.message); // Log for debugging
-
-			// ONLY clear loading flags, DO NOT set errorMessage
 			update((state) => ({
 				...state,
 				isLoading: false,
 				isApplying: false,
 				loadingStep: ''
-				// errorMessage is NOT updated here
 			}));
 		}
 	}
 
-	// --- UNDO/REDO simplified ---
-	// No internal guards needed, applyFilter handles the busy check.
-	// Button enablement handles the initial UUID check.
 	async function undo() {
 		await applyFilter(imageApi.undoChanges, 'Undo');
 	}
@@ -196,17 +167,14 @@ function createImageEditorStore() {
 	}
 
 	function changeImage() {
-		console.log('[Store] Requesting change image.');
 		_resetState();
-		// Component should trigger file input
 	}
 
-	// --- Public Interface ---
 	return {
 		subscribe,
 		selectAndUpload,
 		refreshImage,
-		applyFilter, // Expose if needed for other direct filters
+		applyFilter,
 		undo,
 		redo,
 		changeImage,

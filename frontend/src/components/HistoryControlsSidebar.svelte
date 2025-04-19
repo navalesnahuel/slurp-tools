@@ -2,7 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import { imageEditorStore } from '$lib/stores/imageEditorStore.js';
 
-	export let extraClass = ''; // Prop para clases adicionales
+	export let extraClass = '';
 
 	let imageUUID, isLoading, isApplying;
 	const unsubscribe = imageEditorStore.subscribe((state) => {

@@ -26,7 +26,7 @@
 			description: 'Crop unwanted parts of your image manually or with aspect ratio presets.',
 			link: '/image-crop',
 			icon: '✂️',
-			accentColor: 'green',
+			accentColor: 'crust',
 			comingSoon: false
 		},
 		{
@@ -51,7 +51,7 @@
 			title: 'Images to PDF',
 			description:
 				'Convert multiple images (JPG, PNG, WEBP) into a single organized PDF document.',
-			link: '/images-to-pdf',
+			link: '/image-to-pdf',
 			icon: '📄',
 			accentColor: 'mauve',
 			comingSoon: false
@@ -59,7 +59,6 @@
 	];
 </script>
 
-<!-- 1. Added/Refined Hero Section -->
 <section class="page-hero">
 	<div class="hero-content">
 		<h1 class="headline">Simplify Your Digital Tasks</h1>
@@ -70,9 +69,7 @@
 	</div>
 </section>
 
-<!-- 2. Tools Grid Section -->
 <section class="tools-section" id="tools">
-	<!-- 3. Improved Heading -->
 	<div class="grid-container">
 		{#each tools as tool, index}
 			<ToolCard
@@ -89,58 +86,54 @@
 </section>
 
 <style>
-	/* 1. Page Hero Styles */
 	.page-hero {
-		/* Uses default --base background */
-		padding: 4rem 1rem 3rem 1rem; /* Generous vertical padding */
+		padding: 4rem 1rem 3rem 1rem;
 		text-align: center;
-		margin-bottom: 3rem; /* Space below hero */
-		border-bottom: 1px solid var(--overlay); /* Subtle separator */
+		margin-bottom: 3rem;
+		border-bottom: 1px solid var(--overlay);
 	}
 
 	.hero-content {
-		max-width: 850px; /* Allow slightly wider content */
+		max-width: 850px;
 		margin: 0 auto;
 	}
 
 	.headline {
 		font-family: var(--font-header);
-		font-size: clamp(2.6rem, 6vw, 3.8rem); /* Slightly larger */
-		color: var(--mauve); /* Use a primary accent */
+		font-size: clamp(2.6rem, 6vw, 3.8rem);
+		color: var(--mauve);
 		margin: 0 0 1.2rem 0;
 		font-weight: 700;
 		line-height: 1.2;
 	}
 
 	.tagline {
-		font-size: clamp(1.05rem, 2.5vw, 1.25rem); /* Slightly larger */
-		color: var(--text); /* Use default text color */
+		font-size: clamp(1.05rem, 2.5vw, 1.25rem);
+		color: var(--text);
 		max-width: 700px;
 		margin: 0 auto;
-		line-height: 1.65; /* Slightly more line height */
+		line-height: 1.65;
 		font-weight: 400;
 	}
 
-	/* 2. Tools Grid Section Styles */
 	.tools-section {
 		padding: 0 1rem;
 		max-width: 1200px;
-		margin: 0 auto 11rem auto; /* INCREASED bottom margin */
+		margin: 0 auto 11rem auto;
 	}
 
-	/* 3. Section Heading Styles */
 	.section-heading {
 		font-family: var(--font-header);
 		text-align: center;
-		margin-bottom: 3rem; /* More space below heading */
-		font-size: clamp(2rem, 4.5vw, 2.5rem); /* Larger heading */
+		margin-bottom: 3rem;
+		font-size: clamp(2rem, 4.5vw, 2.5rem);
 		color: var(--teal);
 		font-weight: 600;
 	}
 
 	.grid-container {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); /* Keep wider cards */
+		grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
 		gap: 2rem;
 		align-items: stretch;
 	}

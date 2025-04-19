@@ -18,7 +18,6 @@
 			if (newTab) {
 				newTab.focus();
 			} else {
-				// Consider showing error via store?
 				alert('Could not open image in new tab. Please check your popup blocker settings.');
 			}
 		} catch (error) {
@@ -38,7 +37,7 @@
 		padding: 0;
 		box-shadow: none;
 		background: none;
-		margin-top: -0.5rem; /* Adjust spacing if needed */
+		margin-top: -0.5rem;
 	}
 	.save-button {
 		background-color: var(--red);

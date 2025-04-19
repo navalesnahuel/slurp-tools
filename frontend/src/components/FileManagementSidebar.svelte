@@ -3,7 +3,7 @@
 	import { truncateFilename } from '$lib/utils/helpers.js';
 	import { createEventDispatcher } from 'svelte';
 
-	export let extraClass = ''; // Prop para clases adicionales desde el padre
+	export let extraClass = '';
 
 	const dispatch = createEventDispatcher();
 	$: ({ originalFilename, imageUUID, isLoading } = $imageEditorStore);

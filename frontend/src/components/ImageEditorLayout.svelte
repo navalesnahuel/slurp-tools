@@ -6,17 +6,14 @@
 	import LoadingIndicator from './LoadingIndicator.svelte';
 	import ErrorMessageDisplay from './ErrorMessageDisplay.svelte';
 
-	// Expose slots for customization
-	/** @type {string} The title for the initial upload prompt */
 	export let toolTitle = 'Image Editor';
-	/** @type {string} The description for the initial upload prompt */
+
 	export let toolDescription = 'Select an image to start editing.';
 
 	let fileInputRef;
 
-	// Subscribe to store states needed for layout control
 	$: isLoading = $imageEditorStore.isLoading;
-	$: isApplying = $imageEditorStore.isApplying; // Maybe combine with isLoading for simplicity?
+	$: isApplying = $imageEditorStore.isApplying;
 	$: loadingStep = $imageEditorStore.loadingStep;
 	$: errorMessage = $imageEditorStore.errorMessage;
 	$: hasImage = !!$imageEditorStore.imageUUID || !!$imageEditorStore.imageUrl;
@@ -30,11 +27,10 @@
 		if (file) {
 			imageEditorStore.selectAndUpload(file);
 		}
-		// Reset input value allows selecting the same file again
+
 		if (event.target) event.target.value = null;
 	}
 
-	// Allow components in slots to trigger file open
 	function openFilePicker() {
 		triggerFileInput();
 	}
@@ -43,7 +39,6 @@
 <div class="editor-layout-wrapper">
 	<div class="page-container">
 		{#if !hasImage && !isLoading}
-			<!-- Initial State -->
 			<InitialUploadPrompt
 				title={toolTitle}
 				description={toolDescription}
@@ -51,16 +46,13 @@
 				on:open={triggerFileInput}
 			/>
 		{:else if isLoading && (!hasImage || !$imageEditorStore.imageUrl)}
-			<!-- Loading State (Before image is visible) -->
 			<LoadingIndicator message={loadingStep || 'Loading...'} {errorMessage} />
 		{:else}
-			<!-- Editor Interface -->
 			<div
 				class="editor-interface"
 				class:loading={isLoading}
 				transition:fade={{ duration: 300 }}
 			>
-				<!-- Toolbar -->
 				<div class="top-toolbar">
 					<div class="toolbar-left">
 						<slot name="toolbar-left" {openFilePicker}></slot>
@@ -70,11 +62,9 @@
 					</div>
 				</div>
 
-				<!-- Main Area -->
 				<div class="main-area">
 					<slot name="main-content"></slot>
 					{#if isLoading && hasImage && $imageEditorStore.imageUrl}
-						<!-- Overlay only when image exists but is loading/applying -->
 						<div class="main-area-overlay">
 							<div class="spinner"></div>
 							{#if loadingStep}<p>{loadingStep}</p>{/if}
@@ -82,7 +72,6 @@
 					{/if}
 				</div>
 
-				<!-- Sidebar -->
 				<div class="right-sidebar">
 					<slot name="sidebar-content" {openFilePicker}></slot>
 					{#if errorMessage}
@@ -92,7 +81,6 @@
 			</div>
 		{/if}
 
-		<!-- Hidden File Input -->
 		<input
 			type="file"
 			bind:this={fileInputRef}
@@ -105,16 +93,14 @@
 </div>
 
 <style>
-	/* --- Base & Layout Variables --- */
 	:root {
 		--toolbar-height: 60px;
-		--sidebar-width: 280px; /* Default, can be overridden by page */
+		--sidebar-width: 280px;
 		--grid-size: 20px;
 		--editor-v-margin: 3rem;
-		--editor-fixed-height: calc(90vh - var(--editor-v-margin) - 1px); /* Default */
+		--editor-fixed-height: calc(90vh - var(--editor-v-margin) - 1px);
 	}
 
-	/* Ensure layout fills space */
 	.editor-layout-wrapper {
 		max-width: 1400px;
 		margin: calc(var(--editor-v-margin) / 2) auto;
@@ -141,7 +127,6 @@
 		max-height: var(--editor-fixed-height);
 	}
 
-	/* --- Editor Interface Grid --- */
 	.editor-interface {
 		display: grid;
 		grid-template-areas: 'toolbar toolbar' 'main sidebar';
@@ -150,12 +135,11 @@
 		flex-grow: 1;
 		overflow: hidden;
 		background-color: var(--base);
-		min-height: 0; /* Prevents grid blowout */
-		height: 100%; /* Fill container */
-		position: relative; /* For overlay positioning */
+		min-height: 0;
+		height: 100%;
+		position: relative;
 	}
 
-	/* --- Toolbar --- */
 	.top-toolbar {
 		grid-area: toolbar;
 		background-color: var(--mantle);
@@ -174,15 +158,14 @@
 		gap: 1rem;
 	}
 
-	/* --- Main Area --- */
 	.main-area {
 		grid-area: main;
-		overflow: hidden; /* Content within should handle its own scroll/fit */
-		position: relative; /* For overlay */
-		display: flex; /* Center content by default */
+		overflow: hidden;
+		position: relative;
+		display: flex;
 		justify-content: center;
 		align-items: center;
-		padding: 1.2rem; /* Default padding */
+		padding: 1.2rem;
 		box-sizing: border-box;
 		background-color: var(--base);
 		background-image:
@@ -210,7 +193,7 @@
 		flex-direction: column;
 		justify-content: center;
 		align-items: center;
-		z-index: 5; /* Below toolbar but above main content */
+		z-index: 5;
 		color: var(--text);
 		text-align: center;
 	}
@@ -224,10 +207,9 @@
 		box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 	}
 
-	/* --- Right Sidebar --- */
 	.right-sidebar {
 		grid-area: sidebar;
-		background-color: var(--crust); /* Use crust for sidebar bg */
+		background-color: var(--crust);
 		width: var(--sidebar-width);
 		padding: 1.5rem;
 		overflow-y: auto;
@@ -237,12 +219,11 @@
 		gap: 1.5rem;
 		color: var(--text);
 		box-sizing: border-box;
-		max-height: 100%; /* Ensure sidebar content scrolls */
+		max-height: 100%;
 	}
 
-	/* --- Loading Spinner (reusable) --- */
 	.spinner {
-		border: 4px solid var(--surface1); /* Use theme colors */
+		border: 4px solid var(--surface1);
 		border-top: 4px solid var(--blue);
 		border-radius: 50%;
 		width: 40px;
@@ -259,12 +240,11 @@
 		}
 	}
 
-	/* --- Responsive --- */
 	@media (max-width: 900px) {
 		:root {
-			--editor-v-margin: 0; /* No margin on mobile */
-			--editor-fixed-height: auto; /* Allow content height */
-			--sidebar-width: 100%; /* Sidebar becomes full width */
+			--editor-v-margin: 0;
+			--editor-fixed-height: auto;
+			--sidebar-width: 100%;
 		}
 		.editor-layout-wrapper {
 			margin: 0;
@@ -276,29 +256,29 @@
 			border-radius: 0;
 			box-shadow: none;
 			height: auto;
-			min-height: 100vh; /* Ensure it fills viewport */
+			min-height: 100vh;
 			max-height: none;
 		}
 		.editor-interface {
 			grid-template-areas: 'toolbar' 'main' 'sidebar';
-			grid-template-rows: var(--toolbar-height) auto auto; /* Main area flexible, sidebar auto */
-			grid-template-columns: 1fr; /* Single column */
-			height: auto; /* Allow height based on content */
+			grid-template-rows: var(--toolbar-height) auto auto;
+			grid-template-columns: 1fr;
+			height: auto;
 		}
 		.main-area {
 			padding: 0.8rem;
-			min-height: 300px; /* Ensure minimum space for image */
+			min-height: 300px;
 		}
 		.right-sidebar {
 			width: 100%;
-			max-height: none; /* Allow sidebar to grow */
+			max-height: none;
 			height: auto;
 			border-left: none;
 			border-top: 1px solid var(--overlay);
-			box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+			box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.1);
 			padding: 1rem;
 			gap: 1rem;
-			overflow-y: visible; /* Don't scroll sidebar independently */
+			overflow-y: visible;
 		}
 		.top-toolbar {
 			padding: 0 1rem;
@@ -322,7 +302,7 @@
 		}
 		.toolbar-left,
 		.toolbar-right {
-			gap: 0.5rem; /* Reduce gap */
+			gap: 0.5rem;
 		}
 	}
 </style>

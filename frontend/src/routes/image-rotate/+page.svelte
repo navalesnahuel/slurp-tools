@@ -6,71 +6,55 @@
 	import FileManagementSidebar from '../../components/FileManagementSidebar.svelte';
 	import HistoryControlsSidebar from '../../components/HistoryControlsSidebar.svelte';
 	import DownloadSidebar from '../../components/DownloadSidebar.svelte';
-	import { applyRotateFilter } from '$lib/services/imageApi.js'; // API específica
+	import { applyRotateFilter } from '$lib/services/imageApi.js';
 
-	// --- Estado Local del Componente ---
-	let rotationAngle = 0; // Ángulo actual para aplicar
+	let rotationAngle = 0;
 
-	// --- Suscripciones al Store ---
 	let imageUUID, imageUrl, isLoading, isApplying, storeErrorMessage;
 	const unsubscribeStore = imageEditorStore.subscribe((state) => {
 		imageUUID = state.imageUUID;
 		imageUrl = state.imageUrl;
 		isLoading = state.isLoading;
 		isApplying = state.isApplying;
-		storeErrorMessage = state.errorMessage; // Error general del store
+		storeErrorMessage = state.errorMessage;
 	});
 
-	// --- Handlers de Carga/Error de Imagen (para conectar al store) ---
 	function handleImageLoad(event) {
 		if (!event.target) return;
 		const target = event.target;
 		const dimensions = { width: target.naturalWidth, height: target.naturalHeight };
-		console.log(
-			`[RotatePage] handleImageLoad. Natural Dims: ${dimensions.width}x${dimensions.height}`
-		);
-		imageEditorStore.imageLoadComplete(dimensions); // Señala al store
+
+		imageEditorStore.imageLoadComplete(dimensions);
 	}
 
 	function handleImageError() {
-		console.error('[RotatePage] handleImageError: Image failed to load src:', imageUrl);
 		imageEditorStore.imageLoadError('Error: Failed to load image preview.');
 	}
 
-	// --- Lógica Específica de Rotación ---
 	function setRotation(angle) {
-		if (isLoading || isApplying) return; // No cambiar si está ocupado
+		if (isLoading || isApplying) return;
 		rotationAngle = angle;
-		// Podrías llamar a handleApplyRotate aquí si quisieras aplicar inmediatamente
-		// handleApplyRotate();
 	}
 
 	async function handleApplyRotate() {
 		if (!imageUUID || isLoading || isApplying) {
-			console.warn('Apply rotate skipped: No UUID or busy.');
 			return;
 		}
-		const angleNum = Number(rotationAngle); // Asegura que sea número
+		const angleNum = Number(rotationAngle);
 		if (isNaN(angleNum)) {
-			console.warn('Apply rotate skipped: Invalid angle.');
-			// Podrías mostrar un error local si quieres
 			return;
 		}
 
-		// Llama al store para aplicar el filtro
 		await imageEditorStore.applyFilter(
-			(uuid) => applyRotateFilter(uuid, angleNum), // Pasa la llamada a la API específica
-			`Rotate ${angleNum}°` // Nombre para logs/mensajes
+			(uuid) => applyRotateFilter(uuid, angleNum),
+			`Rotate ${angleNum}°`
 		);
-		// El store maneja isLoading, isApplying y refresh
 	}
 
-	// --- Computaciones Reactivas ---
 	$: canApplyRotate = !!imageUUID && !isLoading && !isApplying;
-	// No hay errores locales específicos en este componente simple
+
 	$: displayError = storeErrorMessage;
 
-	// --- Lifecycle ---
 	onDestroy(() => {
 		unsubscribeStore();
 		imageEditorStore.cleanupBlobUrl();
@@ -82,7 +66,6 @@
 </svelte:head>
 
 <ImageEditorLayout toolTitle="Image Rotator" toolDescription="Select an image to rotate it.">
-	<!-- Toolbar -->
 	<div slot="toolbar-left">
 		<span class="toolbar-label">Rotator</span>
 	</div>
@@ -97,7 +80,6 @@
 		</button>
 	</div>
 
-	<!-- Main Content -->
 	<div slot="main-content" class="rotate-main-content">
 		{#if imageUrl}
 			<div class="img-container">
@@ -116,14 +98,12 @@
 		{/if}
 	</div>
 
-	<!-- Sidebar Content -->
 	<svelte:fragment slot="sidebar-content" let:openFilePicker>
 		<FileManagementSidebar on:openFilePicker={openFilePicker} />
 
-		<!-- Sección específica de Rotación -->
 		<div class="sidebar-section section-rotate">
 			<h4 class="h4-maroon">Rotation</h4>
-			<!-- Rotation Slider -->
+
 			<div class="control-item rotation-slider-group">
 				<label for="rotation-slider">Angle</label>
 				<div class="slider-container">
@@ -140,7 +120,7 @@
 					<span class="rotation-value">{rotationAngle}°</span>
 				</div>
 			</div>
-			<!-- Quick Buttons -->
+
 			<div class="control-item quick-rotate-buttons">
 				<button
 					class="button-like quick-button"
@@ -168,7 +148,6 @@
 		<HistoryControlsSidebar />
 		<DownloadSidebar />
 
-		<!-- Muestra error del store -->
 		{#if displayError}
 			<div class="sidebar-error-container">
 				<p class="error-message sidebar-error">{displayError}</p>
@@ -178,7 +157,6 @@
 </ImageEditorLayout>
 
 <style>
-	/* --- Estilos Toolbar y Main (similares a otros) --- */
 	.toolbar-label {
 		font-size: 1rem;
 		font-weight: 600;
@@ -267,7 +245,6 @@
 		padding: 1rem 0;
 	}
 
-	/* --- Estilos Sidebar Específicos de Rotate --- */
 	.sidebar-section {
 		padding: 1.2rem 1.5rem;
 		border-radius: 10px;
@@ -283,17 +260,15 @@
 		border-bottom: 1px solid color-mix(in srgb, currentColor 25%, transparent);
 	}
 
-	/* Colores para la sección de rotación */
 	.section-rotate {
-		background-color: var(--maroon); /* Fondo Maroon */
-		color: var(--text); /* Texto claro */
+		background-color: var(--maroon);
+		color: var(--text);
 	}
 	.section-rotate h4 {
-		color: var(--text); /* Texto claro título */
+		color: var(--text);
 		border-bottom-color: color-mix(in srgb, var(--text) 30%, transparent);
 	}
 
-	/* Estilos para controles de rotación */
 	.control-item {
 		margin-bottom: 1.2rem;
 	}
@@ -316,8 +291,8 @@
 		flex-grow: 1;
 		height: 8px;
 		cursor: pointer;
-		accent-color: var(--peach); /* Color thumb */
-		background: var(--overlay); /* Color track */
+		accent-color: var(--peach);
+		background: var(--overlay);
 		border-radius: 4px;
 		margin: 0;
 		min-width: 80px;
@@ -352,8 +327,8 @@
 		width: 100%;
 		padding: 0.4rem 0.5rem;
 		font-size: 0.8rem;
-		background-color: var(--crust); /* Fondo oscuro botones */
-		color: var(--flamingo); /* Texto acentuado */
+		background-color: var(--crust);
+		color: var(--flamingo);
 		border: 1px solid var(--mantle);
 		box-shadow: none;
 	}
@@ -370,7 +345,6 @@
 		border-color: var(--surface1) !important;
 	}
 
-	/* Estilo para contenedor de error */
 	.sidebar-error-container {
 		margin-top: 0;
 	}

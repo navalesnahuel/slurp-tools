@@ -3,32 +3,28 @@
 	import { fade } from 'svelte/transition';
 	import { browser } from '$app/environment';
 
-	// ** VERIFY THIS PATH IS CORRECT **
-	import * as imageApi from '$lib/services/imageApi.js'; // Ensure this path is right!
+	import * as imageApi from '$lib/services/imageApi.js';
 
-	// --- State Variables ---
-	let imageFile = null; // The currently selected local file
-	let originalFilename = ''; // Name of the original local file
-	let imageUUID = null; // UUID from the server after processing
-	let imageInfo = null; // { UUID, Version } from the server
-	let imageUrl = ''; // URL to display (blob URL for local, server URL for processed)
-	let currentBlobUrl = null; // Specifically tracks the active blob URL for revocation
-	let isLoading = false; // General loading (scan, filters)
-	let isGeneratingPdf = false; // Specific loading for PDF generation
+	let imageFile = null;
+	let originalFilename = '';
+	let imageUUID = null;
+	let imageInfo = null;
+	let imageUrl = '';
+	let currentBlobUrl = null;
+	let isLoading = false;
+	let isGeneratingPdf = false;
 	let loadingStep = '';
 	let errorMessage = '';
 
-	// Image/Canvas related state
-	let imageRef = null; // bind:this={imageRef}
-	let canvasRef = null; // bind:this={canvasRef}
+	let imageRef = null;
+	let canvasRef = null;
 	let ctx = null;
-	let originalDimensions = null; // { width, height } - Natural dimensions of the image
+	let originalDimensions = null;
 	let naturalWidth = 0;
 	let naturalHeight = 0;
-	let displayWidth = 0; // Rendered width of the image in the container
-	let displayHeight = 0; // Rendered height of the image in the container
+	let displayWidth = 0;
+	let displayHeight = 0;
 
-	// Perspective Handles State
 	const HANDLE_RADIUS = 8;
 	let handles = [
 		{ x: 0.05, y: 0.05 },
@@ -37,9 +33,8 @@
 		{ x: 0.05, y: 0.95 }
 	];
 	let activeHandleIndex = -1;
-	let showHandles = false; // Controls visibility of handles and canvas overlay
+	let showHandles = false;
 
-	// --- Resize Observer ---
 	let resizeObserver = null;
 
 	function setupResizeObserver() {
@@ -50,7 +45,7 @@
 					entry.target === imageRef &&
 					canvasRef &&
 					canvasRef.parentElement &&
-					showHandles // Only update canvas if handles are meant to be shown
+					showHandles
 				) {
 					const imgRect = imageRef.getBoundingClientRect();
 					const newWidth = imgRect.width;
@@ -70,22 +65,18 @@
 							displayHeight = newHeight;
 							canvasRef.width = displayWidth;
 							canvasRef.height = displayHeight;
-							// Use requestAnimationFrame to ensure drawing happens after layout updates
+
 							requestAnimationFrame(drawCanvas);
 						}
 					} else {
-						// Handle cases where image dimensions become invalid (e.g., display:none)
 						if (displayWidth > 0 || displayHeight > 0) {
-							console.warn(
-								`[DEBUG] ResizeObserver: Image dimensions invalid (${newWidth}x${newHeight}). Resetting canvas.`
-							);
 							canvasRef.style.left = `0px`;
 							canvasRef.style.top = `0px`;
 							canvasRef.width = 0;
 							canvasRef.height = 0;
 							displayWidth = 0;
 							displayHeight = 0;
-							if (ctx) ctx.clearRect(0, 0, 0, 0); // Clear the (now zero-sized) canvas
+							if (ctx) ctx.clearRect(0, 0, 0, 0);
 						}
 					}
 				}
@@ -103,98 +94,75 @@
 		if (resizeObserver && imageRef) {
 			try {
 				resizeObserver.unobserve(imageRef);
-			} catch (e) {
-				// Ignore errors if element is already gone
-			}
+			} catch (e) {}
 		}
 	}
 
-	// --- Cleanup ---
 	function cleanupBlobUrl() {
 		if (currentBlobUrl && currentBlobUrl.startsWith('blob:')) {
-			console.log('[DEBUG] Revoking Blob URL:', currentBlobUrl);
 			URL.revokeObjectURL(currentBlobUrl);
 			currentBlobUrl = null;
 		}
 	}
 
-	// --- File Selection (Handles the initial/only file selection) ---
 	function handleFileSelect(event) {
 		const fileInput = event.target;
 		const file = fileInput.files?.[0];
 		if (file && browser) {
-			console.log('[DEBUG] handleFileSelect: New file selected:', file.name);
+			stopObservingImageResize();
+			cleanupBlobUrl();
 
-			// --- Reset State for the Newly Selected File ---
-			stopObservingImageResize(); // Stop observing any previous image
-			cleanupBlobUrl(); // Clean up any old blob url
-
-			// Reset all relevant state variables
-			imageFile = file; // Store the new file object
-			imageUUID = null; // Clear any previous server UUID
-			imageInfo = null; // Clear any previous server info
-			originalFilename = file.name; // Store the new file's name
+			imageFile = file;
+			imageUUID = null;
+			imageInfo = null;
+			originalFilename = file.name;
 			errorMessage = '';
-			isLoading = false; // Start fresh, not loading yet
+			isLoading = false;
 			isGeneratingPdf = false;
-			loadingStep = 'Loading image...'; // Indicate loading the preview
+			loadingStep = 'Loading image...';
 			handles = [
-				// Reset handles to default positions
 				{ x: 0.05, y: 0.05 },
 				{ x: 0.95, y: 0.05 },
 				{ x: 0.95, y: 0.95 },
 				{ x: 0.05, y: 0.95 }
 			];
-			showHandles = true; // Show handles immediately for adjustment
-			originalDimensions = null; // Reset dimensions (will be set on load)
+			showHandles = true;
+			originalDimensions = null;
 			naturalWidth = 0;
 			naturalHeight = 0;
-			displayWidth = 0; // Reset display dimensions
+			displayWidth = 0;
 			displayHeight = 0;
 			if (ctx && canvasRef) {
-				// Clear canvas if context exists
 				ctx.clearRect(0, 0, canvasRef.width, canvasRef.height);
 				canvasRef.width = 0;
 				canvasRef.height = 0;
 			}
 
-			// --- Create and set NEW Blob URL for Preview ---
 			imageUrl = URL.createObjectURL(file);
-			currentBlobUrl = imageUrl; // Track the new blob URL for cleanup
+			currentBlobUrl = imageUrl;
 
-			// --- Reset file input to allow selecting the same file again later if needed ---
 			fileInput.value = null;
-
-			console.log(
-				'[DEBUG] handleFileSelect: State prepared for new local image preview. Waiting for img on:load.'
-			);
 		} else {
-			console.log('[DEBUG] handleFileSelect: No file selected or selection cancelled.');
-			if (fileInput) fileInput.value = null; // Reset input even on cancel
-			// No state reset needed here if the user cancels - keep the existing image shown if any.
+			if (fileInput) fileInput.value = null;
 		}
 	}
 
-	// --- Canvas Drawing & Interaction ---
 	function drawCanvas() {
 		if (
 			!canvasRef ||
 			!imageRef ||
 			!ctx ||
-			!showHandles || // Don't draw if handles are hidden
+			!showHandles ||
 			displayWidth <= 0 ||
 			displayHeight <= 0 ||
 			!browser
 		) {
-			// If context exists but we shouldn't draw, ensure canvas is clear
 			if (ctx && canvasRef) ctx.clearRect(0, 0, canvasRef.width, canvasRef.height);
-			return; // Conditions not met for drawing
+			return;
 		}
 
-		// Clear previous frame
 		ctx.clearRect(0, 0, displayWidth, displayHeight);
 
-		// Draw perspective lines
 		ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
 		ctx.lineWidth = 2;
 		ctx.beginPath();
@@ -205,7 +173,6 @@
 		ctx.closePath();
 		ctx.stroke();
 
-		// Draw handles
 		ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
 		ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
 		ctx.lineWidth = 1;
@@ -223,7 +190,6 @@
 		});
 	}
 
-	// --- Mouse/Touch Event Handling for Handles ---
 	function getEventPos(event) {
 		if (!canvasRef) return { x: 0, y: 0 };
 		const rect = canvasRef.getBoundingClientRect();
@@ -232,7 +198,6 @@
 		return { x: clientX - rect.left, y: clientY - rect.top };
 	}
 
-	// Combined busy state check
 	$: isBusy = isLoading || isGeneratingPdf;
 
 	function handleMouseDown(event) {
@@ -248,7 +213,7 @@
 			return;
 
 		const pos = getEventPos(event);
-		const hitRadiusSquared = (HANDLE_RADIUS * 1.8) ** 2; // Larger hit area
+		const hitRadiusSquared = (HANDLE_RADIUS * 1.8) ** 2;
 
 		for (let i = 0; i < handles.length; i++) {
 			const handleX = handles[i].x * displayWidth;
@@ -261,7 +226,7 @@
 				return;
 			}
 		}
-		activeHandleIndex = -1; // No handle hit
+		activeHandleIndex = -1;
 	}
 
 	function handleMouseMove(event) {
@@ -277,21 +242,21 @@
 			return;
 
 		const pos = getEventPos(event);
-		// Calculate position relative to display size, clamped between 0 and 1
+
 		let newX = Math.max(0, Math.min(1, pos.x / displayWidth));
 		let newY = Math.max(0, Math.min(1, pos.y / displayHeight));
 
 		handles[activeHandleIndex].x = newX;
 		handles[activeHandleIndex].y = newY;
 
-		requestAnimationFrame(drawCanvas); // Redraw canvas on move
+		requestAnimationFrame(drawCanvas);
 	}
 
 	function handleMouseUp(event) {
-		event.preventDefault(); // Prevent potential lingering effects
+		event.preventDefault();
 		if (activeHandleIndex !== -1) {
 			activeHandleIndex = -1;
-			if (canvasRef && showHandles && !isBusy) canvasRef.style.cursor = 'grab'; // Reset cursor if handles still visible and not busy
+			if (canvasRef && showHandles && !isBusy) canvasRef.style.cursor = 'grab';
 		}
 	}
 
@@ -302,16 +267,13 @@
 	}
 
 	function handleMouseLeaveCanvas() {
-		// Reset cursor if not actively dragging a handle
 		if (activeHandleIndex === -1 && !isBusy && canvasRef) {
 			canvasRef.style.cursor = 'default';
 		}
 	}
 
-	// --- Image Loading & Dimension Fetching ---
 	function handleImageLoad() {
 		if (!imageRef || !browser) {
-			console.warn('[DEBUG] handleImageLoad: Called but imageRef or browser missing.');
 			return;
 		}
 
@@ -319,40 +281,23 @@
 		naturalHeight = imageRef.naturalHeight;
 		originalDimensions = { width: naturalWidth, height: naturalHeight };
 
-		console.log(
-			`[DEBUG] handleImageLoad: Image loaded. Natural dims: ${naturalWidth}x${naturalHeight}. URL type: ${imageUrl.startsWith('blob:') ? 'Blob' : 'Server/Other'}`
-		);
-
-		// Determine if loading finished based on loadingStep
-		// Make sure not to interfere with PDF generation step
 		if (
 			!isGeneratingPdf &&
 			(loadingStep === 'Loading image...' || loadingStep === 'Loading new version...')
 		) {
 			isLoading = false;
 			loadingStep = '';
-			console.log('[DEBUG] handleImageLoad: Loading finished, isLoading set to false.');
 		} else if (!isGeneratingPdf && isLoading) {
-			// If still marked as loading but step is unexpected, reset loading state anyway
-			console.warn(
-				'[DEBUG] handleImageLoad: Finished loading, but loadingStep was unexpected:',
-				loadingStep,
-				'. Resetting isLoading.'
-			);
 			isLoading = false;
 			loadingStep = '';
 		}
 
-		// Get canvas context if not already available
 		if (!ctx && canvasRef) {
 			ctx = canvasRef.getContext('2d');
-			console.log('[DEBUG] handleImageLoad: Canvas context obtained.');
 		}
 
-		// Use tick to ensure the image element has potentially been rendered and sized
 		tick().then(() => {
 			if (imageRef) {
-				// Get initial display size immediately after load/tick
 				const initialRect = imageRef.getBoundingClientRect();
 				if (initialRect.width > 0 && initialRect.height > 0 && canvasRef) {
 					const wrapperRect = canvasRef.parentElement.getBoundingClientRect();
@@ -362,87 +307,67 @@
 					canvasRef.height = displayHeight;
 					canvasRef.style.left = `${initialRect.left - wrapperRect.left}px`;
 					canvasRef.style.top = `${initialRect.top - wrapperRect.top}px`;
-					console.log(
-						`[DEBUG] handleImageLoad: Initial canvas setup. Size: ${displayWidth.toFixed(1)}x${displayHeight.toFixed(1)}`
-					);
-					// Only draw if handles are meant to be shown at this point
+
 					if (showHandles) {
-						requestAnimationFrame(drawCanvas); // Draw initial state
+						requestAnimationFrame(drawCanvas);
 					}
 				} else {
-					console.warn(
-						'[DEBUG] handleImageLoad: Image rect invalid after tick. Canvas not sized.'
-					);
 				}
-				// Start observing for subsequent resizes
+
 				observeImageResize(imageRef);
 			} else {
-				console.error(
-					'[DEBUG] handleImageLoad: Image ref missing AFTER tick(). Cannot observe or setup canvas.'
-				);
 			}
 		});
 	}
 
 	function handleImageElementError() {
-		console.error('[DEBUG] handleImageElementError: Image element failed to load:', imageUrl);
 		if (!errorMessage) errorMessage = 'Error: Failed to load image preview.';
 		stopObservingImageResize();
-		resetStateOnError(true); // Reset state, keeping the error message
+		resetStateOnError(true);
 	}
 
-	// --- Image Update / Refresh (After Server Processing) ---
 	function refreshImage() {
 		if (!imageUUID || !browser) {
 			errorMessage = 'Cannot refresh image: No image UUID available.';
-			console.warn('[DEBUG] refreshImage: Cannot refresh - No UUID or browser env false.');
-			resetStateOnError(true); // Reset, keeping error
+
+			resetStateOnError(true);
 			return;
 		}
-		console.log('[DEBUG] refreshImage: Starting refresh for UUID:', imageUUID);
 
-		isLoading = true; // Set main loading flag
-		isGeneratingPdf = false; // Ensure PDF flag is reset if refresh is triggered
+		isLoading = true;
+		isGeneratingPdf = false;
 		loadingStep = 'Loading new version...';
 		errorMessage = '';
-		showHandles = false; // Hide handles for processed image view
-		stopObservingImageResize(); // Stop observing the old blob/server image if any
-		cleanupBlobUrl(); // Ensure any local blob URL is revoked
-
-		// Construct the new image URL with a timestamp to bypass cache
-		const newImageUrl = imageApi.getRenderImage(imageUUID) + '?t=' + Date.now();
-		imageUrl = newImageUrl; // Update the imageUrl to trigger Svelte's reactivity
-
-		console.log('[DEBUG] refreshImage: New server imageUrl set. Waiting for img on:load.');
-		// handleImageLoad will be called when the new image successfully loads
-	}
-
-	// --- Helper to Reset State (Used on error or potentially before new file selection) ---
-	function resetStateOnError(keepError = false) {
-		console.log('[DEBUG] resetStateOnError: Resetting state. Keep error:', keepError);
+		showHandles = false;
 		stopObservingImageResize();
 		cleanupBlobUrl();
 
-		// Reset all key state variables
+		const newImageUrl = imageApi.getRenderImage(imageUUID) + '?t=' + Date.now();
+		imageUrl = newImageUrl;
+	}
+
+	function resetStateOnError(keepError = false) {
+		stopObservingImageResize();
+		cleanupBlobUrl();
+
 		imageFile = null;
 		originalFilename = '';
 		imageUUID = null;
 		imageInfo = null;
-		imageUrl = ''; // Clear the image source
+		imageUrl = '';
 		originalDimensions = null;
 		naturalWidth = 0;
 		naturalHeight = 0;
 		displayWidth = 0;
 		displayHeight = 0;
-		isLoading = false; // Reset loading flags
+		isLoading = false;
 		isGeneratingPdf = false;
 		loadingStep = '';
-		showHandles = false; // Ensure handles are hidden on reset
-		activeHandleIndex = -1; // Reset active handle
+		showHandles = false;
+		activeHandleIndex = -1;
 
-		if (!keepError) errorMessage = ''; // Clear error message unless requested otherwise
+		if (!keepError) errorMessage = '';
 
-		// Clear and reset canvas if it exists
 		if (browser && ctx && canvasRef) {
 			ctx.clearRect(0, 0, canvasRef.width, canvasRef.height);
 			canvasRef.width = 0;
@@ -450,174 +375,136 @@
 			canvasRef.style.left = '0px';
 			canvasRef.style.top = '0px';
 			canvasRef.style.cursor = 'default';
-			canvasRef.style.display = 'none'; // Ensure canvas is hidden
+			canvasRef.style.display = 'none';
 		}
 	}
 
-	// --- Truncate Filename Helper ---
 	function truncateFilename(name, length = 25) {
 		if (!name) return '';
 		if (name.length <= length) return name;
 		const extIndex = name.lastIndexOf('.');
 		const ext = extIndex !== -1 ? name.substring(extIndex) : '';
 		const base = extIndex !== -1 ? name.substring(0, extIndex) : name;
-		const maxBaseLength = Math.max(0, length - ext.length - 3); // Account for '...'
+		const maxBaseLength = Math.max(0, length - ext.length - 3);
 		const truncatedBase = base.length > maxBaseLength ? base.substring(0, maxBaseLength) : base;
 		return `${truncatedBase}...${ext}`;
 	}
 
-	// --- CORE WORKFLOW: Scan & Upload Local Image ---
 	async function handleApplyScanAndUpload() {
-		console.log('[DEBUG] handleApplyScanAndUpload: Function called.');
 		if (!imageFile || !naturalWidth || !naturalHeight) {
 			errorMessage = 'Please select an image and wait for it to load completely.';
-			console.warn(
-				'[DEBUG] handleApplyScanAndUpload: Cannot apply - missing image file or natural dimensions.'
-			);
+
 			return;
 		}
-		// Double check we are in the correct state (local file loaded, handles shown)
+
 		if (!showHandles || !currentBlobUrl) {
 			errorMessage =
 				'Cannot apply scan - editor state is inconsistent. Please re-select the image.';
-			console.warn(
-				'[DEBUG] handleApplyScanAndUpload: State inconsistent (showHandles or currentBlobUrl missing).'
-			);
+
 			return;
 		}
 
-		console.log('[DEBUG] handleApplyScanAndUpload: Proceeding with Scan & Upload.');
 		isLoading = true;
-		isGeneratingPdf = false; // Not generating PDF during scan
+		isGeneratingPdf = false;
 		loadingStep = 'Scanning & Uploading...';
 		errorMessage = '';
-		showHandles = false; // Hide handles during/after processing
-		stopObservingImageResize(); // Stop observing the local image
+		showHandles = false;
+		stopObservingImageResize();
 
-		// Clear canvas visually as handles are hidden
 		if (ctx && canvasRef) {
 			ctx.clearRect(0, 0, canvasRef.width, canvasRef.height);
-			canvasRef.style.display = 'none'; // Hide canvas element itself
+			canvasRef.style.display = 'none';
 		}
 
 		try {
-			// Convert relative handle coordinates (0-1) to absolute pixel coordinates based on natural image size
 			const originalCorners = handles.map((handle) => [
 				Math.round(handle.x * naturalWidth),
 				Math.round(handle.y * naturalHeight)
 			]);
 
-			console.log(
-				'[DEBUG] handleApplyScanAndUpload: Calling imageApi.scanAndUpload with corners:',
-				originalCorners
-			);
 			const result = await imageApi.scanAndUpload(imageFile, originalCorners);
-			console.log('[DEBUG] handleApplyScanAndUpload: API Success:', result);
 
-			// Update state with server response
 			imageInfo = result;
 			imageUUID = result.UUID;
-			imageFile = null; // Clear the local file reference, we now rely on the server version
-			originalFilename = `Processed: ${result.UUID.substring(0, 8)}...`; // Update displayed name
+			imageFile = null;
+			originalFilename = `Processed: ${result.UUID.substring(0, 8)}...`;
 
-			cleanupBlobUrl(); // Revoke the local blob URL, no longer needed
+			cleanupBlobUrl();
 
-			// Trigger refresh to load the processed image from the server
-			// isLoading state will be handled by refreshImage -> handleImageLoad
 			refreshImage();
 		} catch (err) {
-			console.error('[DEBUG] handleApplyScanAndUpload: API Failed:', err);
 			errorMessage = err.message || 'An unknown error occurred during scanning and upload.';
-			// Reset state completely on failure, keeping the error message
+
 			resetStateOnError(true);
 		}
 	}
 
-	// --- Helper for subsequent UUID-based filters/actions ---
 	async function applyFilterAndUpdate(filterPromise, filterName = 'filter') {
-		// Guard against running while already loading or generating PDF
 		if (!imageInfo || !imageUUID || isBusy) {
 			errorMessage = `Cannot apply ${filterName} - no valid server image state or already processing.`;
-			console.warn(
-				`[DEBUG] applyFilterAndUpdate (${filterName}): Cannot apply - missing imageInfo/UUID or isBusy.`
-			);
+
 			return;
 		}
-		console.log(
-			`[DEBUG] applyFilterAndUpdate (${filterName}): Starting for UUID: ${imageUUID}`
-		);
 
-		isLoading = true; // Main loading flag
+		isLoading = true;
 		loadingStep = `Applying ${filterName}...`;
 		errorMessage = '';
-		showHandles = false; // Ensure handles remain hidden
-		stopObservingImageResize(); // May not be strictly needed if already stopped, but safe
+		showHandles = false;
+		stopObservingImageResize();
 
 		try {
-			// Await the specific API call (passed as filterPromise)
 			const result = await filterPromise;
-			console.log(`[DEBUG] applyFilterAndUpdate (${filterName}): API Success:`, result);
 
-			// Update state with the new version/info from the server
 			imageInfo = result;
-			imageUUID = result.UUID; // Should be the same, but update just in case
+			imageUUID = result.UUID;
 
-			// Refresh the image view to show the result of the filter
-			// isLoading state will be handled by refreshImage -> handleImageLoad
 			refreshImage();
 		} catch (filterErr) {
-			console.error(`[DEBUG] applyFilterAndUpdate (${filterName}): API Failed:`, filterErr);
 			errorMessage = filterErr.message || `Failed to apply ${filterName}.`;
-			// Reset loading state on error, keep the current (failed) image view
+
 			isLoading = false;
 			loadingStep = '';
-			// Re-enable observation if the image element is still present
+
 			tick().then(() => {
 				if (imageRef) observeImageResize(imageRef);
 			});
 		}
 	}
 
-	// --- Specific Action Handlers (Using the Helper) ---
 	function handleApplyRotate(angle) {
-		if (!imageInfo || !imageUUID || isBusy) return; // Guard
+		if (!imageInfo || !imageUUID || isBusy) return;
 		applyFilterAndUpdate(imageApi.applyRotateFilter(imageInfo.UUID, angle), `Rotate ${angle}°`);
 	}
 
 	async function handleUndo() {
-		if (!imageInfo || !imageUUID || imageInfo.Version < 1 || isBusy) return; // Guard
+		if (!imageInfo || !imageUUID || imageInfo.Version < 1 || isBusy) return;
 		applyFilterAndUpdate(imageApi.undoChanges(imageInfo.UUID), 'Undo');
 	}
 
 	async function handleRedo() {
-		if (!imageInfo || !imageUUID || isBusy) return; // Guard
+		if (!imageInfo || !imageUUID || isBusy) return;
 		applyFilterAndUpdate(imageApi.redoChanges(imageInfo.UUID), 'Redo');
 	}
 
 	function handleOpenImage() {
-		if (!imageUUID || isBusy) return; // Guard
+		if (!imageUUID || isBusy) return;
 		const url = imageApi.getRenderImage(imageUUID);
-		const urlTs = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`; // Add timestamp to bypass cache
+		const urlTs = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
 		window.open(urlTs, '_blank');
 	}
 
-	// --- PDF Generation Handler ---
 	async function handleDownloadPdf() {
-		// Use the reactive state 'canDownloadPdf' for the guard
 		if (!canDownloadPdf || !browser) {
-			console.warn('[DEBUG] handleDownloadPdf: Cannot generate PDF - Conditions not met.');
 			return;
 		}
 
 		isGeneratingPdf = true;
 		loadingStep = 'Generating PDF...';
 		errorMessage = '';
-		console.log('[DEBUG] handleDownloadPdf: Starting PDF generation for UUID:', imageUUID);
 
 		try {
-			// 1. Fetch the current processed image data from the server
 			const renderUrl = imageApi.getRenderImage(imageUUID);
-			console.log(`[DEBUG] Fetching image data from: ${renderUrl}`);
+
 			const imageResponse = await fetch(renderUrl);
 			if (!imageResponse.ok) {
 				throw new Error(
@@ -626,89 +513,66 @@
 			}
 			const imageBlob = await imageResponse.blob();
 
-			// Determine a filename (optional but good practice)
-			const fileExtension = imageBlob.type.split('/')[1] || 'png'; // Default to png if type is missing
+			const fileExtension = imageBlob.type.split('/')[1] || 'png';
 			const filename = `scanned_${imageUUID}_v${imageInfo?.Version || 0}.${fileExtension}`;
 
-			// 2. Convert the fetched blob into a File object to send to the API
 			const imageFileForPdf = new File([imageBlob], filename, { type: imageBlob.type });
-			console.log(
-				`[DEBUG] Created File object for PDF: ${imageFileForPdf.name}, size: ${imageFileForPdf.size}, type: ${imageFileForPdf.type}`
-			);
 
-			// 3. Call the imported imagesToPDF function from imageApi
-			// It handles the actual API call to /image/pdf and the download/opening
-			await imageApi.imagesToPDF([imageFileForPdf]); // Pass the file in an array
-
-			console.log(
-				'[DEBUG] handleDownloadPdf: PDF generation successful (API handled download/open).'
-			);
+			await imageApi.imagesToPDF([imageFileForPdf]);
 		} catch (err) {
-			console.error('[DEBUG] handleDownloadPdf: Failed:', err);
-			// The API function might show an alert, but set error message here too
 			errorMessage = err.message || 'An unknown error occurred while generating the PDF.';
 		} finally {
-			// Reset loading state regardless of success or failure
 			isGeneratingPdf = false;
 			loadingStep = '';
-			console.log('[DEBUG] handleDownloadPdf: Finished.');
 		}
 	}
 
-	// --- Trigger File Input ---
 	function handleOpenImageClick() {
-		if (isBusy || !browser) return; // Guard
-		console.log('[DEBUG] handleOpenImageClick: Triggering file input.');
+		if (isBusy || !browser) return;
+
 		document.getElementById('file-input')?.click();
 	}
 
-	// --- Lifecycle ---
 	onMount(() => {
 		if (browser) {
 			setupResizeObserver();
-			// Get canvas context right away if canvas element exists
+
 			if (canvasRef) {
 				ctx = canvasRef.getContext('2d');
-				console.log('[DEBUG] onMount: Initial canvas context obtained.');
 			}
 		}
 	});
 
 	onDestroy(() => {
 		if (browser) {
-			console.log('[DEBUG] onDestroy: Cleaning up...');
 			stopObservingImageResize();
 			if (resizeObserver) {
 				resizeObserver.disconnect();
-				console.log('[DEBUG] onDestroy: ResizeObserver disconnected.');
 			}
-			cleanupBlobUrl(); // Clean up any lingering blob URL
+			cleanupBlobUrl();
 		}
 	});
 
-	// --- Reactive States for UI Logic ---
-	$: isImageSelected = !!imageFile || !!imageUrl; // True if local file selected OR server image URL exists
+	$: isImageSelected = !!imageFile || !!imageUrl;
 	$: isInitialLocalImageLoaded =
-		!!imageFile && !!naturalWidth && naturalHeight > 0 && showHandles; // Ready for perspective adjustment
-	$: isImageProcessed = // State where server image is loaded and displayed, and nothing is loading
+		!!imageFile && !!naturalWidth && naturalHeight > 0 && showHandles;
+	$: isImageProcessed =
 		!!imageInfo && !!imageUUID && !showHandles && !isBusy && !!imageUrl && !currentBlobUrl;
 
-	$: canApplyScan = isInitialLocalImageLoaded && !isBusy; // Can only scan when local image loaded & handles shown & not busy
-	$: canEdit = isImageProcessed && !isBusy; // Can only edit when processed image is displayed & not busy
+	$: canApplyScan = isInitialLocalImageLoaded && !isBusy;
+	$: canEdit = isImageProcessed && !isBusy;
 	$: canUndo = canEdit && imageInfo?.Version > 0;
-	$: canRedo = canEdit; // Redo capability check might need more info from API in future
-	$: canOpenImage = isImageProcessed && !isBusy; // Can open the final image if not busy
-	$: canDownloadPdf = isImageProcessed && !isBusy; // Can download PDF if processed and not busy
+	$: canRedo = canEdit;
+	$: canOpenImage = isImageProcessed && !isBusy;
+	$: canDownloadPdf = isImageProcessed && !isBusy;
 
-	// --- Reactive Updates for Canvas Visibility and Clearing ---
 	$: if (browser && canvasRef) {
-		// Control canvas display based on showHandles
 		canvasRef.style.display = showHandles ? 'block' : 'none';
-		// If handles are hidden, ensure the canvas content is cleared
+
 		if (!showHandles && ctx) {
 			ctx.clearRect(0, 0, canvasRef.width, canvasRef.height);
 		}
-		// Update cursor based on state
+
 		if (showHandles && !isBusy && activeHandleIndex === -1) {
 			canvasRef.style.cursor = 'grab';
 		} else if (activeHandleIndex !== -1) {
@@ -718,19 +582,15 @@
 		}
 	}
 
-	// Attempt to get context if canvasRef becomes available later
 	$: if (browser && canvasRef && !ctx) {
-		console.log('[DEBUG] Reactive Effect: canvasRef exists, getting context.');
 		ctx = canvasRef.getContext('2d');
 	}
 </script>
 
-<!-- TEMPLATE -->
 <svelte:head><title>Image Scanner - Slurp Tools</title></svelte:head>
 <div class="editor-wrapper">
 	<div class="page-container">
 		{#if !isImageSelected && !isBusy}
-			<!-- Initial State -->
 			<div class="initial-upload-state" transition:fade={{ duration: 200 }}>
 				<h1>Image Scanner</h1>
 				<p class="tool-description">
@@ -752,20 +612,18 @@
 							><path
 								d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"
 							/></svg
-						>Open Image</button
+						>Scan Image</button
 					>
 				</div>
 				{#if errorMessage}<p class="error-message">{errorMessage}</p>{/if}
 			</div>
 		{:else if isBusy && !imageUrl}
-			<!-- Loading State (Initial) -->
 			<div class="loading-state" transition:fade={{ duration: 200 }}>
 				<div class="spinner"></div>
 				<p>{loadingStep || 'Loading...'}</p>
 				{#if errorMessage}<p class="error-message">{errorMessage}</p>{/if}
 			</div>
 		{:else if isImageSelected || isBusy}
-			<!-- Editor Interface -->
 			<div
 				class="editor-interface"
 				class:loading={isBusy}
@@ -774,7 +632,6 @@
 				<div class="top-toolbar">
 					<div class="toolbar-left"><span class="toolbar-label">Scanner</span></div>
 					<div class="toolbar-right">
-						<!-- Scan & Upload Button -->
 						<button
 							class="apply-button button-like toolbar-button"
 							on:click={handleApplyScanAndUpload}
@@ -792,7 +649,6 @@
 				</div>
 				<div class="main-area">
 					<div class="image-canvas-wrapper">
-						<!-- Image Display Area -->
 						{#if imageUrl}
 							<img
 								key={imageUrl}
@@ -803,7 +659,7 @@
 								on:error={handleImageElementError}
 								style:opacity={isBusy && !showHandles ? 0.6 : 1}
 							/>
-							<!-- Canvas Overlay for Handles -->
+
 							<canvas
 								bind:this={canvasRef}
 								on:mousedown={handleMouseDown}
@@ -820,7 +676,7 @@
 							<p class="placeholder-text error-message">Could not load image.</p>
 						{/if}
 					</div>
-					<!-- Loading Overlay for Main Area -->
+
 					{#if isBusy && loadingStep && !loadingStep.includes('Loading new version')}
 						<div class="main-area-overlay">
 							<div class="spinner"></div>
@@ -829,7 +685,6 @@
 					{/if}
 				</div>
 				<div class="right-sidebar">
-					<!-- File Info Section -->
 					<div class="sidebar-section file-management">
 						<h4 class="h4-mauve">Image</h4>
 						{#if originalFilename}
@@ -845,32 +700,10 @@
 							</p>
 						{/if}
 					</div>
-					<!-- Status/Instructions Section -->
-					<div class="sidebar-section details">
-						<h4 class="h4-pink">Status & Instructions</h4>
-						{#if isInitialLocalImageLoaded && !isBusy}
-							<p>
-								Drag the red corners to define the perspective, then click "Scan &
-								Upload" in the toolbar.
-							</p>
-						{:else if showHandles && !!imageFile && !(!!naturalWidth && naturalHeight > 0) && !isBusy}
-							<p>Loading image preview, please wait...</p>
-						{:else if isImageProcessed && !isBusy}
-							<p>
-								Scan complete (Version: {imageInfo?.Version ?? 'N/A'}). Use edit
-								controls below or download options.
-							</p>
-						{:else if isBusy}
-							<p>{loadingStep || 'Processing'}...</p>
-						{:else}
-							<p>Select an image using the 'Open Image' button.</p>
-						{/if}
-					</div>
-					<!-- Edit Controls Section -->
+
 					<div class="sidebar-section controls">
 						<h4 class="h4-teal">Edit Controls</h4>
 						<div class="control-item history-controls">
-							<!-- Rotate Buttons -->
 							<button
 								class="button-like history-button"
 								on:click={() => handleApplyRotate(90)}
@@ -912,7 +745,6 @@
 							>
 						</div>
 						<div class="control-item history-controls">
-							<!-- Undo/Redo Buttons -->
 							<button
 								class="button-like history-button"
 								on:click={handleUndo}
@@ -954,7 +786,7 @@
 							>
 						</div>
 					</div>
-					<!-- Download Section -->
+
 					<div class="sidebar-section download-section">
 						<div style="display: flex; flex-direction: column; gap: 0.8rem;">
 							<button
@@ -963,7 +795,7 @@
 								disabled={!canOpenImage}
 								title="Open final image in a new tab">Open Image</button
 							>
-							<!-- Download PDF Button -->
+
 							<button
 								on:click={handleDownloadPdf}
 								class="button-like download-pdf-button"
@@ -1000,12 +832,12 @@
 							</button>
 						</div>
 					</div>
-					<!-- Sidebar Error Message Area -->
+
 					{#if errorMessage}<p class="error-message sidebar-error">{errorMessage}</p>{/if}
 				</div>
 			</div>
 		{/if}
-		<!-- Hidden File Input -->
+
 		<input
 			type="file"
 			id="file-input"
@@ -1017,7 +849,6 @@
 </div>
 
 <style>
-	/* --- Layout Variables --- */
 	:root {
 		--toolbar-height: 60px;
 		--sidebar-width: 280px;
@@ -1067,7 +898,7 @@
 		height: 100%;
 		min-height: 400px;
 	}
-	/* Added rule for initial state full radius */
+
 	.initial-upload-state:only-child {
 		border-radius: 12px;
 	}
@@ -1111,13 +942,12 @@
 	}
 	.toolbar-label {
 		font-size: 0.9rem;
-		color: var(--base); /* Adjusted */
+		color: var(--base);
 		margin-right: 0.5rem;
-		font-weight: 600; /* Adjusted */
-		font-family: var(--font-header); /* Added */
+		font-weight: 600;
+		font-family: var(--font-header);
 	}
 
-	/* --- Main Area Style --- */
 	.main-area {
 		grid-area: main;
 		overflow: hidden;
@@ -1127,22 +957,19 @@
 		align-items: center;
 		padding: 1.2rem;
 		box-sizing: border-box;
-		background-color: var(--base); /* Solid background color */
-		background-image: /* Grid lines */
+		background-color: var(--base);
+		background-image:
 			repeating-linear-gradient(
-				/* Horizontal lines */ var(--surface0),
-				/* Adjusted color */ var(--surface0) 1px,
-				transparent 1px,
-				transparent var(--grid-size)
+				rgba(225, 240, 255, 0.4) 0 1px,
+				transparent 1px var(--grid-size)
 			),
 			repeating-linear-gradient(
-				/* Vertical lines */ 90deg,
-				var(--surface0),
-				/* Adjusted color */ var(--surface0) 1px,
-				transparent 1px,
-				transparent var(--grid-size)
+				90deg,
+				rgba(225, 240, 255, 0.4) 0 1px,
+				transparent 1px var(--grid-size)
 			);
-		background-size: var(--grid-size) var(--grid-size); /* Size of one grid square */
+
+		background-size: var(--grid-size) var(--grid-size);
 	}
 
 	.image-canvas-wrapper {
@@ -1175,12 +1002,12 @@
 		-webkit-user-drag: none;
 	}
 	.image-canvas-wrapper canvas {
-		position: absolute; /* left/top set by JS */
-		width: auto; /* Set by JS */
-		height: auto; /* Set by JS */
+		position: absolute;
+		width: auto;
+		height: auto;
 		touch-action: none;
 		pointer-events: auto;
-		display: none; /* Controlled reactively */
+		display: none;
 	}
 	.main-area-overlay {
 		position: absolute;
@@ -1219,7 +1046,7 @@
 		width: var(--sidebar-width);
 		padding: 1.5rem;
 		overflow-y: auto;
-		border-left: 1px solid var(--overlay0); /* Adjusted */
+		border-left: 1px solid var(--overlay0);
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
@@ -1262,7 +1089,6 @@
 		margin-bottom: 0.8rem;
 		font-size: 0.8rem;
 	}
-	/* Removed Change Button styles */
 
 	.sidebar-section.details {
 		background-color: color-mix(in srgb, var(--pink) 85%, var(--mantle));
@@ -1309,7 +1135,6 @@
 		background: none;
 		margin-top: -0.5rem;
 	}
-	/* --- End Themed Sidebar Sections --- */
 
 	.sidebar-section h4 {
 		font-family: var(--font-header);
@@ -1328,7 +1153,7 @@
 		border-radius: 4px;
 		overflow-wrap: break-word;
 		word-break: break-all;
-		border: 1px solid var(--overlay0); /* Adjusted */
+		border: 1px solid var(--overlay0);
 		line-height: 1.4;
 	}
 	.button-like {
@@ -1336,7 +1161,7 @@
 		align-items: center;
 		justify-content: center;
 		padding: 0.7rem 1.5rem;
-		border: 1px solid var(--overlay1); /* Adjusted */
+		border: 1px solid var(--overlay1);
 		border-radius: 8px;
 		font-family: var(--font-body);
 		font-size: 0.95rem;
@@ -1353,7 +1178,7 @@
 		line-height: 1.2;
 		gap: 0.5rem;
 		user-select: none;
-		background-color: var(--surface1); /* Adjusted */
+		background-color: var(--surface1);
 		color: var(--text);
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 		width: 100%;
@@ -1366,15 +1191,15 @@
 		box-shadow: none;
 		transform: none;
 		filter: grayscale(30%);
-		background-color: var(--surface0); /* Adjusted */
-		border-color: var(--overlay0); /* Adjusted */
-		color: var(--subtext0); /* Added */
+		background-color: var(--surface0);
+		border-color: var(--overlay0);
+		color: var(--subtext0);
 	}
 	.button-like:not(:disabled):hover {
 		transform: translateY(-2px);
 		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-		background-color: var(--surface2); /* Added */
-		border-color: var(--overlay2); /* Added */
+		background-color: var(--surface2);
+		border-color: var(--overlay2);
 	}
 	.button-like:active:not(:disabled) {
 		transform: translateY(0px);
@@ -1383,9 +1208,9 @@
 	}
 
 	.initial-upload-state .file-label {
-		border: 2px dashed var(--base); /* Adjusted */
+		border: 2px dashed var(--base);
 		background-color: var(--mantle);
-		color: var(--base); /* Adjusted */
+		color: var(--base);
 		width: 100%;
 		max-width: 350px;
 		box-shadow: none;
@@ -1395,75 +1220,74 @@
 			color 0.2s ease;
 	}
 	.initial-upload-state .file-label:hover:not(:disabled) {
-		background-color: var(--crust); /* Adjusted */
+		background-color: var(--crust);
 		border-color: var(--blue);
 		color: var(--blue);
 	}
 	.apply-button {
 		background-color: var(--green);
-		color: var(--crust); /* Adjusted */
+		color: var(--crust);
 		border-color: var(--green);
-		font-weight: 700; /* Added */
+		font-weight: 700;
 	}
 	.apply-button:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--green) 90%, white); /* Adjusted */
-		border-color: color-mix(in srgb, var(--green) 90%, white); /* Adjusted */
-		color: var(--crust); /* Adjusted */
+		background-color: color-mix(in srgb, var(--green) 90%, white);
+		border-color: color-mix(in srgb, var(--green) 90%, white);
+		color: var(--crust);
 	}
 	.apply-button:disabled {
-		background-color: var(--overlay0); /* Adjusted */
-		color: var(--subtext0); /* Added */
-		border-color: var(--overlay0); /* Added */
+		background-color: var(--overlay0);
+		color: var(--subtext0);
+		border-color: var(--overlay0);
 	}
 	.toolbar-button {
 		width: auto !important;
 		padding: 0.5rem 1.2rem;
 	}
-	/* Removed Change Button styles */
+
 	.save-button {
 		background-color: var(--blue);
-		color: var(--crust); /* Adjusted */
+		color: var(--crust);
 		border-color: var(--blue);
-		font-weight: 700; /* Added */
+		font-weight: 700;
 	}
 	.save-button:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--blue) 90%, white); /* Adjusted */
-		border-color: color-mix(in srgb, var(--blue) 90%, white); /* Adjusted */
+		background-color: color-mix(in srgb, var(--blue) 90%, white);
+		border-color: color-mix(in srgb, var(--blue) 90%, white);
 	}
 	.save-button:disabled {
-		background-color: var(--overlay0); /* Adjusted */
-		color: var(--subtext0); /* Added */
-		border-color: var(--overlay0); /* Added */
+		background-color: var(--overlay0);
+		color: var(--subtext0);
+		border-color: var(--overlay0);
 	}
-	/* Style for the new PDF button */
+
 	.download-pdf-button {
-		background-color: var(--red); /* Use red for PDF */
-		color: var(--crust); /* Dark text on light red */
+		background-color: var(--red);
+		color: var(--crust);
 		border-color: var(--red);
-		font-weight: 700; /* Added */
+		font-weight: 700;
 	}
 	.download-pdf-button:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--red) 90%, white); /* Adjusted */
-		border-color: color-mix(in srgb, var(--red) 90%, white); /* Adjusted */
+		background-color: color-mix(in srgb, var(--red) 90%, white);
+		border-color: color-mix(in srgb, var(--red) 90%, white);
 	}
 	.download-pdf-button:disabled {
-		background-color: var(--overlay0); /* Adjusted */
-		color: var(--subtext0); /* Added */
-		border-color: var(--overlay0); /* Added */
+		background-color: var(--overlay0);
+		color: var(--subtext0);
+		border-color: var(--overlay0);
 	}
 	.download-pdf-button .button-spinner {
-		/* Spinner color for PDF button */
-		border-color: color-mix(in srgb, var(--crust) 50%, transparent); /* Adjusted */
-		border-top-color: var(--crust); /* Adjusted */
+		border-color: color-mix(in srgb, var(--crust) 50%, transparent);
+		border-top-color: var(--crust);
 	}
 
 	.history-button {
 		flex: 1;
 		padding: 0.5rem 0.8rem;
 		font-size: 0.85rem;
-		background-color: var(--base); /* Adjusted */
+		background-color: var(--base);
 		color: var(--teal);
-		border: 1px solid var(--overlay0); /* Adjusted */
+		border: 1px solid var(--overlay0);
 		box-shadow: none;
 		gap: 0.4rem;
 		width: auto;
@@ -1480,9 +1304,9 @@
 		border-color: var(--teal);
 	}
 	.history-button:disabled {
-		background-color: var(--overlay0); /* Adjusted */
+		background-color: var(--overlay0);
 		color: var(--subtext0);
-		border-color: var(--overlay0); /* Adjusted */
+		border-color: var(--overlay0);
 	}
 	.control-item {
 		margin-bottom: 0.8rem;
@@ -1496,9 +1320,9 @@
 		justify-content: space-between;
 	}
 	.error-message {
-		background-color: color-mix(in srgb, var(--red) 15%, var(--mantle)); /* Adjusted */
+		background-color: color-mix(in srgb, var(--red) 15%, var(--mantle));
 		color: var(--red);
-		border: 1px solid color-mix(in srgb, var(--red) 50%, transparent); /* Adjusted */
+		border: 1px solid color-mix(in srgb, var(--red) 50%, transparent);
 		padding: 0.8rem 1.2rem;
 		border-radius: 6px;
 		margin: 1rem auto 0 auto;
@@ -1523,7 +1347,7 @@
 		border-radius: 6px;
 	}
 	.spinner {
-		border: 4px solid var(--overlay1); /* Adjusted */
+		border: 4px solid var(--overlay1);
 		border-top: 4px solid var(--blue);
 		border-radius: 50%;
 		width: 35px;
@@ -1542,7 +1366,7 @@
 		margin: 0 0.5em 0 0;
 		line-height: 0;
 	}
-	/* Adjusted spinner colors */
+
 	.apply-button .button-spinner {
 		border-color: color-mix(in srgb, var(--crust) 50%, transparent);
 		border-top-color: var(--crust);
@@ -1564,7 +1388,7 @@
 		:root {
 			--editor-v-margin: 0rem;
 			--editor-fixed-height: auto;
-			--sidebar-width: 100%; /* Added */
+			--sidebar-width: 100%;
 		}
 		.editor-wrapper {
 			margin: 0;
@@ -1577,16 +1401,16 @@
 			box-shadow: none;
 			height: auto;
 			min-height: 100vh;
-			max-height: none; /* Added */
+			max-height: none;
 		}
 		.editor-interface {
 			grid-template-areas: 'toolbar' 'main' 'sidebar';
 			grid-template-rows: var(--toolbar-height) minmax(300px, 55vh) auto;
 			grid-template-columns: 1fr;
 			height: auto;
-			border-radius: 0; /* Added */
+			border-radius: 0;
 		}
-		/* Added resets for rounding */
+
 		.top-toolbar {
 			border-radius: 0;
 		}
@@ -1605,7 +1429,7 @@
 			max-height: none;
 			height: auto;
 			border-left: none;
-			border-top: 1px solid var(--overlay0); /* Adjusted */
+			border-top: 1px solid var(--overlay0);
 			box-shadow: none;
 			padding: 1rem;
 			gap: 1rem;

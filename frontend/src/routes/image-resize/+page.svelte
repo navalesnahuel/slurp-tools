@@ -7,95 +7,77 @@
 	import HistoryControlsSidebar from '../../components/HistoryControlsSidebar.svelte';
 	import DownloadSidebar from '../../components/DownloadSidebar.svelte';
 	import { applyResizeFilter } from '$lib/services/imageApi.js';
-	// import { debounce } from '$lib/utils/helpers.js'; // Opcional para inputs
 
-	// --- Constantes ---
-	const MAX_DIMENSION = 5000; // Límite para dimensiones
+	const MAX_DIMENSION = 5000;
 
-	// --- Estado Local del Componente ---
 	let targetWidth = '';
 	let targetHeight = '';
 	let keepAspectRatio = true;
-	let isUpdatingProgrammatically = false; // Para evitar bucles en inputs
-	let localErrorMessage = ''; // Para errores de validación locales
+	let isUpdatingProgrammatically = false;
+	let localErrorMessage = '';
 
-	// --- Suscripciones al Store ---
 	let imageUUID, imageUrl, isLoading, isApplying, originalDimensions, storeErrorMessage;
 	const unsubscribeStore = imageEditorStore.subscribe((state) => {
 		imageUUID = state.imageUUID;
 		imageUrl = state.imageUrl;
 		isLoading = state.isLoading;
 		isApplying = state.isApplying;
-		storeErrorMessage = state.errorMessage; // Error general del store
-		// Sincroniza originalDimensions si cambia en el store
+		storeErrorMessage = state.errorMessage;
+
 		if (originalDimensions !== state.originalDimensions) {
 			originalDimensions = state.originalDimensions;
-			// Si hay dimensiones originales, inicializa/resetea los targets
+
 			if (originalDimensions) {
 				initializeTargetDimensions(originalDimensions.width, originalDimensions.height);
 			} else {
-				// Si se eliminan las dimensiones (ej. reset), limpia los inputs
 				targetWidth = '';
 				targetHeight = '';
 			}
 		}
 	});
 
-	// --- Inicialización/Sincronización de Inputs ---
 	function initializeTargetDimensions(origW, origH) {
 		if (!origW || !origH) return;
-		isUpdatingProgrammatically = true; // Evita triggers iniciales
-		console.log(`[ResizePage] Initializing targets from ${origW}x${origH}`);
+		isUpdatingProgrammatically = true;
 
 		let w = Math.max(1, Math.min(origW, MAX_DIMENSION));
 		let h = Math.max(1, Math.min(origH, MAX_DIMENSION));
 		const ratio = origW / origH;
 
-		// Si excede el límite y aspect ratio está bloqueado, recalcula
 		if (keepAspectRatio && (origW > MAX_DIMENSION || origH > MAX_DIMENSION)) {
 			if (w > h) {
-				// Landscape or square exceeding max width
 				w = MAX_DIMENSION;
 				h = Math.max(1, Math.round(w / ratio));
-				// Ensure height didn't exceed max after calculation
+
 				h = Math.min(h, MAX_DIMENSION);
 			} else {
-				// Portrait exceeding max height
 				h = MAX_DIMENSION;
 				w = Math.max(1, Math.round(h * ratio));
-				// Ensure width didn't exceed max after calculation
+
 				w = Math.min(w, MAX_DIMENSION);
 			}
 		}
-		// Asigna valores finales
+
 		targetWidth = w;
 		targetHeight = h;
 
-		console.log(`[ResizePage] Initialized targets to ${targetWidth}x${targetHeight}`);
 		tick().then(() => (isUpdatingProgrammatically = false));
 	}
 
-	// --- Handlers de Carga/Error de Imagen ---
 	function handleImageLoad(event) {
 		if (!event.target) return;
 		const target = event.target;
 		const dimensions = { width: target.naturalWidth, height: target.naturalHeight };
-		console.log(
-			`[ResizePage] handleImageLoad. Natural Dims: ${dimensions.width}x${dimensions.height}`
-		);
-		// Pasa dimensiones al store y completa carga
+
 		imageEditorStore.imageLoadComplete(dimensions);
-		// La suscripción al store detectará el cambio en originalDimensions y llamará a initializeTargetDimensions
 	}
 
 	function handleImageError() {
-		console.error('[ResizePage] handleImageError: Image failed to load src:', imageUrl);
 		imageEditorStore.imageLoadError('Error: Failed to load image preview.');
-		targetWidth = ''; // Limpia inputs si la imagen falla
+		targetWidth = '';
 		targetHeight = '';
 	}
 
-	// --- Lógica de Actualización de Dimensiones ---
 	function updateHeightFromWidth() {
 		if (
 			isUpdatingProgrammatically ||
@@ -107,9 +89,9 @@
 			return;
 
 		isUpdatingProgrammatically = true;
-		localErrorMessage = ''; // Limpia error local
-		let newWidth = Math.max(1, Math.min(targetWidth, MAX_DIMENSION)); // Clamp input
-		if (newWidth !== targetWidth) targetWidth = newWidth; // Actualiza input si se clampa
+		localErrorMessage = '';
+		let newWidth = Math.max(1, Math.min(targetWidth, MAX_DIMENSION));
+		if (newWidth !== targetWidth) targetWidth = newWidth;
 
 		const ratio = originalDimensions.width / originalDimensions.height;
 		if (isNaN(ratio) || ratio <= 0 || originalDimensions.height === 0) {
@@ -118,7 +100,7 @@
 		}
 
 		const newHeight = Math.round(newWidth / ratio);
-		const finalHeight = Math.max(1, Math.min(newHeight, MAX_DIMENSION)); // Clamp calculado
+		const finalHeight = Math.max(1, Math.min(newHeight, MAX_DIMENSION));
 
 		if (targetHeight !== finalHeight) targetHeight = finalHeight;
 		tick().then(() => (isUpdatingProgrammatically = false));
@@ -135,9 +117,9 @@
 			return;
 
 		isUpdatingProgrammatically = true;
-		localErrorMessage = ''; // Limpia error local
-		let newHeight = Math.max(1, Math.min(targetHeight, MAX_DIMENSION)); // Clamp input
-		if (newHeight !== targetHeight) targetHeight = newHeight; // Actualiza input si se clampa
+		localErrorMessage = '';
+		let newHeight = Math.max(1, Math.min(targetHeight, MAX_DIMENSION));
+		if (newHeight !== targetHeight) targetHeight = newHeight;
 
 		const ratio = originalDimensions.width / originalDimensions.height;
 		if (isNaN(ratio) || ratio <= 0) {
@@ -145,26 +127,23 @@
 			return;
 		}
 		const newWidth = Math.round(newHeight * ratio);
-		const finalWidth = Math.max(1, Math.min(newWidth, MAX_DIMENSION)); // Clamp calculado
+		const finalWidth = Math.max(1, Math.min(newWidth, MAX_DIMENSION));
 
 		if (targetWidth !== finalWidth) targetWidth = finalWidth;
 		tick().then(() => (isUpdatingProgrammatically = false));
 	}
 
 	function handleKeepAspectRatioToggle() {
-		// Si se activa, recalcula basado en el ancho (o alto si prefieres)
 		if (keepAspectRatio) {
 			updateHeightFromWidth();
 		}
 	}
 
-	// --- Lógica para Aplicar Resize ---
 	async function handleApplyResize() {
-		localErrorMessage = ''; // Limpia error local
+		localErrorMessage = '';
 		const widthNum = Number(targetWidth);
 		const heightNum = Number(targetHeight);
 
-		// Validación
 		if (!imageUUID || isLoading || isApplying) return;
 		if (isNaN(widthNum) || isNaN(heightNum) || widthNum <= 0 || heightNum <= 0) {
 			localErrorMessage = 'Please enter valid positive dimensions.';
@@ -174,21 +153,18 @@
 			localErrorMessage = `Dimensions cannot exceed ${MAX_DIMENSION}px.`;
 			return;
 		}
-		// Comprobación redundante por si acaso
+
 		if (!originalDimensions) {
 			localErrorMessage = 'Cannot apply resize: Original dimensions not loaded.';
 			return;
 		}
 
-		// Llama a la acción del store para aplicar el filtro
 		await imageEditorStore.applyFilter(
 			(uuid) => applyResizeFilter(uuid, widthNum, heightNum),
 			'Resize'
 		);
-		// El store maneja isLoading, isApplying y refresh
 	}
 
-	// --- Computaciones Reactivas ---
 	$: isValidInput =
 		typeof targetWidth === 'number' &&
 		targetWidth > 0 &&
@@ -198,13 +174,12 @@
 		targetHeight <= MAX_DIMENSION;
 	$: canApplyResize =
 		!!imageUUID && !!originalDimensions && !isLoading && !isApplying && isValidInput;
-	// Muestra error local o del store
+
 	$: displayError = localErrorMessage || storeErrorMessage;
 
-	// --- Lifecycle ---
 	onDestroy(() => {
 		unsubscribeStore();
-		imageEditorStore.cleanupBlobUrl(); // Limpia blob si aplica
+		imageEditorStore.cleanupBlobUrl();
 	});
 </script>
 
@@ -249,7 +224,6 @@
 	<svelte:fragment slot="sidebar-content" let:openFilePicker>
 		<FileManagementSidebar on:openFilePicker={openFilePicker} />
 
-		<!-- Sección específica de Resize -->
 		<div class="sidebar-section section-resize">
 			<h4 class="h4-pink">Resize Dimensions</h4>
 			{#if originalDimensions}
@@ -305,7 +279,6 @@
 		<HistoryControlsSidebar />
 		<DownloadSidebar />
 
-		<!-- Muestra error local o del store -->
 		{#if displayError}
 			<div class="sidebar-error-container">
 				<p class="error-message sidebar-error">{displayError}</p>
@@ -315,7 +288,6 @@
 </ImageEditorLayout>
 
 <style>
-	/* --- Estilos Toolbar y Main (similares a Crop) --- */
 	.toolbar-label {
 		font-size: 1rem;
 		font-weight: 600;
@@ -404,7 +376,6 @@
 		padding: 1rem 0;
 	}
 
-	/* --- Estilos Sidebar Específicos de Resize --- */
 	.sidebar-section {
 		padding: 1.2rem 1.5rem;
 		border-radius: 10px;
@@ -421,23 +392,19 @@
 	}
 
 	.section-resize {
-		background-color: var(--maroon); /* Fondo Rosa */
-		color: var(--text); /* Texto oscuro */
+		background-color: var(--maroon);
+		color: var(--text);
 	}
 	.section-resize h4 {
-		color: var(--text); /* Texto oscuro para el título */
+		color: var(--text);
 		border-bottom-color: color-mix(in srgb, var(--base) 30%, transparent);
 	}
 	.original-dims-info {
 		font-size: 0.8rem;
-		color: color-mix(
-			in srgb,
-			var(--text) 80%,
-			transparent
-		); /* Texto oscuro pero menos énfasis */
+		color: color-mix(in srgb, var(--text) 80%, transparent);
 		margin-bottom: 1rem;
 		text-align: center;
-		background: color-mix(in srgb, var(--text) 10%, transparent); /* Fondo muy sutil oscuro */
+		background: color-mix(in srgb, var(--text) 10%, transparent);
 		padding: 0.3rem 0.6rem;
 		border-radius: 3px;
 	}
@@ -465,7 +432,7 @@
 		border-radius: 6px;
 		font-size: 0.9rem;
 		background-color: var(--base);
-		color: var(--text); /* Texto claro en input oscuro */
+		color: var(--text);
 		box-sizing: border-box;
 		appearance: textfield;
 	}
@@ -507,12 +474,11 @@
 	}
 	.placeholder-text {
 		color: color-mix(in srgb, var(--base) 70%, transparent);
-	} /* Placeholder dentro de sección */
+	}
 
-	/* Estilo para contenedor de error */
 	.sidebar-error-container {
 		margin-top: 0;
-	} /* Sin margen extra si está al final */
+	}
 	.error-message.sidebar-error {
 		margin: 0;
 		width: 100%;
