@@ -1,8 +1,10 @@
 # Slurp Tools
-<img src="/images/slurptools-banner.png/800/200" alt="Slurp Tools" />
+<img src="/images/slurptools-banner.png" alt="Slurp Tools" />
 
 ## Open Source virtual tools to manage your documents and images. 
 Slurp Tools provides a comprehensive suite of free, open-source utilities to streamline your document and image workflows. Whether you need to edit images, scan documents, or convert files to PDF, Slurp Tools offers an integrated solution with an intuitive interface.
+
+<img src="/images/slurptools-website.png" alt="Slurp Tools" />
 
 ## Features
 - Free & open-source.
