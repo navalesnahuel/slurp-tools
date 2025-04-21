@@ -1,17 +1,14 @@
-# Slurp Tools
-
 <img src="/images/slurptools-banner.png" alt="Slurp Tools" />
 
-## ✨ Key Features
+### ✨ Key Features
 
-- **100% Free & Open-Source**: Use and modify without restrictions
-- **Powerful Image Editing**: Transform your images with professional-grade tools
-- **Document Scanning**: Digitize physical documents with intelligent processing
-- **PDF Conversion**: Convert images to PDF with a single click
-- **Version Control**: Full undo/redo functionality for all operations
-- **Cross-platform**: Works on Windows, macOS, and Linux
+- Free & open-source.
+- Undo and Redo
+- Image Edition
+- Scanning Images
+- Images to PDF
 
-## 🚀 Quick Start
+### 🚀 Quick Start
 
 Deploy with Docker in seconds:
 
@@ -24,7 +21,7 @@ Then navigate to:
 http://localhost:2222
 ```
 
-## 🔧 Tech Stack
+### 🔧 Tech Stack
 
 - **Backend**: Go (Golang) - Fast and efficient server-side processing
 - **Frontend**: SvelteKit 
