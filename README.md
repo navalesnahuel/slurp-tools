@@ -27,5 +27,3 @@ http://localhost:2222
 - **Frontend**: SvelteKit 
 - **Scanner Microservice**: Python (Uvicorn + FastAPI) - Optimized for image processing
 - **Containerization**: Docker - Simple deployment across environments
-
-

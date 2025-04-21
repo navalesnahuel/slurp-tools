@@ -44,6 +44,6 @@ COPY --from=python-builder /app /scanner
 EXPOSE 2222 8000 3000
 WORKDIR /
 
-CMD sh -c "cd /scanner && uv run python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 & \
-    PORT=2222 node /app/frontend-build/index.js & \
-    /bin/backend-server"
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
