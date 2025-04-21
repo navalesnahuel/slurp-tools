@@ -1,18 +1,9 @@
-# Ignorar absolutamente todo el frontend
 frontend/** linguist-vendored
 
-# Ignorar los directorios de build
-# .svelte-kit/** linguist-vendored
-# build/** linguist-vendored
-# dist/** linguist-vendored
-
-# Ignorar dependencias
 node_modules/** linguist-vendored
 
-# Ignorar archivos generados o auxiliares
 *.lock linguist-generated
 *.min.js linguist-generated
 *.map linguist-generated
 
-# Ignorar documentación
 *.md linguist-documentation

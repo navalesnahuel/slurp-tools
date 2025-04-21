@@ -3,6 +3,12 @@ bin/
 
 node_modules
 
+#fntend
+/frontend/build
+/frontend/dist
+/frontend/.svelte-kit
+/frontend/node_modules
+
 # Output
 .output
 .vercel
