@@ -1,11 +1,18 @@
-# Ignorar node_modules y archivos generados del frontend
-frontend/node_modules/* linguist-vendored
-frontend/.svelte-kit/* linguist-vendored
-frontend/build/* linguist-vendored
+# Ignorar absolutamente todo el frontend
+frontend/** linguist-vendored
 
-# Ignorar toda la carpeta del frontend para que no impacte el gráfico
-frontend/* linguist-vendored
+# Ignorar los directorios de build
+# .svelte-kit/** linguist-vendored
+# build/** linguist-vendored
+# dist/** linguist-vendored
 
-# También podés ignorar otros archivos temporales del proyecto
+# Ignorar dependencias
+node_modules/** linguist-vendored
+
+# Ignorar archivos generados o auxiliares
 *.lock linguist-generated
 *.min.js linguist-generated
+*.map linguist-generated
+
+# Ignorar documentación
+*.md linguist-documentation
