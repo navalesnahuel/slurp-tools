@@ -27,13 +27,13 @@ func (s *APIServer) RunServer() {
 	fmt.Printf("server running and listening at localhost%s\n", s.listenAddr)
 	router := mux.NewRouter()
 
-	router.HandleFunc("/image/upload", MakeHTTPHandler(s.handleUploadImage))
-	router.HandleFunc("/image/scan", MakeHTTPHandler(s.handleScanner))
-	router.HandleFunc("/image/pdf", MakeHTTPHandler(s.handlerImageToPDF))
-	router.HandleFunc("/image/filter/{image_id}", MakeHTTPHandler(s.handleApplyFilterToImage))
-	router.HandleFunc("/image/{image_id}/undo", MakeHTTPHandler(s.handleUndo))
-	router.HandleFunc("/image/{image_id}/redo", MakeHTTPHandler(s.handleRedo))
-	router.HandleFunc("/image/{image_id}/download", MakeHTTPHandler(s.handleServeFile))
+	router.HandleFunc("/image/upload", Handlers(s.handleUploadImage))
+	router.HandleFunc("/image/scan", Handlers(s.handleScanner))
+	router.HandleFunc("/image/pdf", Handlers(s.handlerImageToPDF))
+	router.HandleFunc("/image/filter/{image_id}", Handlers(s.handleApplyFilterToImage))
+	router.HandleFunc("/image/{image_id}/undo", Handlers(s.handleUndo))
+	router.HandleFunc("/image/{image_id}/redo", Handlers(s.handleRedo))
+	router.HandleFunc("/image/{image_id}/download", Handlers(s.handleServeFile))
 
 	http.ListenAndServe(s.listenAddr, router)
 }

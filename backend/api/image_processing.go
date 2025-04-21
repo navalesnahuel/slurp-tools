@@ -77,7 +77,7 @@ func (sv *APIServer) sendImageToScanner(image image.Image, uuid string, points [
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	imagePart, err := writer.CreateFormFile("file", "image.jpg") // 👈 CAMBIADO de "image" a "file"
+	imagePart, err := writer.CreateFormFile("file", "image.jpg")
 	if err != nil {
 		return nil, fmt.Errorf("could not create image form field: %w", err)
 	}
